@@ -1,0 +1,33 @@
+# Virtual environment
+cotale-env/
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+
+# macOS files
+.DS_Store
+
+# Environment variables / secrets
+.env
+.env.*
+
+# Raw and processed datasets
+data/raw/*
+data/processed/*
+
+# Keep empty data folders in Git
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Generated model files
+models/*.pkl
+models/*.joblib
+
+# Company / project documents
+*.pdf
