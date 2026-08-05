@@ -14,6 +14,7 @@ Projenin amacı; zaman serisi verilerini kullanarak teknoloji ve kavramların ge
 * Pytrends
 * Matplotlib
 * Seaborn
+* Statsmodels
 
 Projenin ilerleyen aşamalarında Prophet, ARIMA/SARIMAX, XGBoost/LightGBM, Plotly ve Streamlit kullanılması planlanmaktadır.
 
@@ -64,6 +65,28 @@ trend-forecast-project/
 - Pytrends çıktısı Google Trends web verisi ile karşılaştırıldı.
 - Doğrulama amacıyla haftalık veri aylık frekansa dönüştürüldü.
 
+### 3. Gün
+
+- Zaman serisi decomposition yöntemi incelendi.
+- `statsmodels` kullanılarak haftalık Google Trends verilerine additive decomposition uygulandı.
+- Observed, trend, seasonal ve residual bileşenleri analiz edildi.
+- Haftalık veri için `period=52` kullanılarak yaklaşık yıllık seasonality yapısı incelendi.
+- ChatGPT'nin uzun vadeli trend değişimi analiz edildi.
+- Büyük pozitif ve negatif residual değerlerinin bulunduğu haftalar tespit edildi.
+- Önemli residual dönemleri dış gelişmeler ve OpenAI duyuruları ile karşılaştırıldı.
+- Residual değerlerin dış olayların nedenini kanıtlamadığı, sıra dışı dönemleri tespit etmek için kullanılabileceği değerlendirildi.
+- ChatGPT, Gemini ve Claude için uzun vadeli trendler karşılaştırıldı.
+- Trend değişimleri hesaplandı:
+  - ChatGPT: yaklaşık `+53.41`
+  - Gemini: yaklaşık `+34.69`
+  - Claude: yaklaşık `+8.68`
+- Decomposition işlemleri tekrar kullanılabilir hale getirilerek `src/time_series.py` içerisine taşındı.
+- `decompose_series()` fonksiyonu geliştirildi.
+- Decomposition sonuçlarını DataFrame'e dönüştürmek için `decomposition_to_dataframe()` fonksiyonu oluşturuldu.
+- `expected = trend + seasonal` değeri hesaplanarak gerçek değerlerle decomposition temel seviyesi karşılaştırılabilir hale getirildi.
+- Notebook içerisinden `src` modüllerinin kullanımı düzenlendi.
+- `requirements.txt` güncellenerek Statsmodels ve güncel proje bağımlılıkları kaydedildi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -71,6 +94,7 @@ Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmakt
 ```text
 data/raw/
 data/processed/
+```
 
 ## Kurulum
 
@@ -95,3 +119,5 @@ pip install -r requirements.txt
 ## Durum
 
 Proje geliştirme aşamasındadır.
+
+Veri toplama, preprocessing, ilk keşifsel veri analizi ve zaman serisi decomposition aşamaları tamamlanmıştır. Sonraki aşamada tahmin modelleri için veri hazırlığı ve modelleme çalışmaları yapılacaktır.
