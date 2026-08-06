@@ -87,6 +87,35 @@ trend-forecast-project/
 - Notebook içerisinden `src` modüllerinin kullanımı düzenlendi.
 - `requirements.txt` güncellenerek Statsmodels ve güncel proje bağımlılıkları kaydedildi.
 
+### 4. Gün
+
+- Forecasting aşamasına geçildi.
+- ChatGPT zaman serisi zaman sırası korunarak train ve test setlerine ayrıldı.
+- Son 12 haftalık veri test seti olarak kullanıldı.
+- Gerçek tahmin modellerini karşılaştırmak amacıyla naive baseline model oluşturuldu.
+- Naive baseline için:
+  - MAE: `4.17`
+  - RMSE: `5.05`
+  sonuçları elde edildi.
+- Gerçek test değerleri ile baseline tahminleri görselleştirildi.
+- ARIMA modelinin `p`, `d` ve `q` parametrelerinin temel mantığı incelendi.
+- Zaman serisinin durağanlığı Augmented Dickey-Fuller (ADF) testi ile kontrol edildi.
+- Ham ChatGPT serisinin durağan olmadığı gözlemlendi.
+- Birinci dereceden differencing sonrasında seri durağan hale geldi ve `d=1` aday olarak belirlendi.
+- ACF ve PACF grafikleri kullanılarak ARIMA için olası `p` ve `q` değerleri incelendi.
+- Farklı ARIMA konfigürasyonları test edildi:
+  - `ARIMA(2,1,0)`
+  - `ARIMA(0,1,2)`
+  - `ARIMA(2,1,2)`
+  - `ARIMA(1,1,1)`
+- Modeller aynı test dönemi üzerinde MAE ve RMSE metrikleri ile karşılaştırıldı.
+- En iyi tek-test sonucu `ARIMA(1,1,1)` modeli ile elde edildi:
+  - MAE: `3.71`
+  - RMSE: `4.51`
+- `ARIMA(1,1,1)` naive baseline modelinden daha düşük hata verdi.
+- Tek bir test döneminin model seçimi için yeterli olmayabileceği değerlendirildi.
+- Bir sonraki aşamada time-series cross-validation ile modellerin farklı zaman dönemlerindeki performanslarının test edilmesine karar verildi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -120,4 +149,9 @@ pip install -r requirements.txt
 
 Proje geliştirme aşamasındadır.
 
-Veri toplama, preprocessing, ilk keşifsel veri analizi ve zaman serisi decomposition aşamaları tamamlanmıştır. Sonraki aşamada tahmin modelleri için veri hazırlığı ve modelleme çalışmaları yapılacaktır.
+Veri toplama, preprocessing, keşifsel veri analizi, time series decomposition,
+baseline forecasting ve ilk ARIMA modelleme çalışmaları tamamlanmıştır.
+
+Mevcut tek-test değerlendirmesinde `ARIMA(1,1,1)` en düşük MAE ve RMSE
+değerlerini vermiştir. Sonraki aşamada time-series cross-validation
+uygulanarak model performansı farklı zaman dönemlerinde doğrulanacaktır.

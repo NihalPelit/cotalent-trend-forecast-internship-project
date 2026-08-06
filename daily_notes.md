@@ -561,3 +561,465 @@ komutu kullanıldı.
 - Baseline tahmin yaklaşımı oluşturmak
 - Prophet ve ARIMA modelleme aşamasına hazırlanmak
 - İlerleyen aşamada tahmin performansını MAE ve RMSE ile değerlendirmek
+
+## Day 4 — 06.08.2026
+
+### Hedefler
+
+- Forecasting aşamasına giriş yapmak
+- Zaman serisi verisini train ve test olarak doğru şekilde ayırmak
+- Naive baseline tahmin modeli oluşturmak
+- Tahmin performansını MAE ve RMSE ile değerlendirmek
+- ARIMA modelinin temel mantığını öğrenmek
+- Zaman serisinin durağanlığını test etmek
+- Differencing işlemini uygulamak
+- ARIMA için `d` parametresini belirlemek
+- ACF ve PACF grafiklerini incelemek
+- Farklı ARIMA parametrelerini test etmek
+- ARIMA modellerini naive baseline ile karşılaştırmak
+
+### Yapılan Çalışmalar
+
+#### 1. Forecasting İçin Train/Test Ayrımı
+
+Temizlenmiş ChatGPT Google Trends serisi forecasting çalışmaları için
+kullanıldı.
+
+Toplam 157 haftalık zaman serisinin:
+
+- İlk 145 haftası train
+- Son 12 haftası test
+
+olarak ayrıldı.
+
+Train ve test verileri zaman sırası korunarak oluşturuldu.
+
+Train verisinin son tarihi:
+
+`2026-05-03`
+
+Test verisinin ilk tarihi:
+
+`2026-05-10`
+
+olarak bulundu.
+
+Zaman serilerinde random train/test split kullanılmaması gerektiği incelendi.
+
+Bunun nedeni, gelecekteki verilerin yanlışlıkla train setine girerek modelin
+gelecek bilgisini önceden görmesine neden olabilmesidir.
+
+Bu nedenle forecasting problemlerinde geçmiş verilerin train, daha sonraki
+verilerin ise test olarak kullanılması gerektiği öğrenildi.
+
+#### 2. Naive Baseline Model
+
+Gerçek forecasting modellerini değerlendirebilmek için önce basit bir
+referans model oluşturuldu.
+
+Naive baseline yaklaşımında:
+
+- Train serisinin son değeri alındı.
+- Son bilinen değer `73` olarak bulundu.
+- Test dönemindeki bütün haftalar için tahmin değeri `73` olarak kullanıldı.
+
+Bu yaklaşım:
+
+"Bir sonraki dönemlerde değer, en son gözlemlenen değerle aynı kalacaktır."
+
+varsayımına dayanmaktadır.
+
+Baseline modelin amacı gelişmiş bir tahmin üretmek değil, daha karmaşık
+modellerin gerçekten iyileşme sağlayıp sağlamadığını ölçmek için referans
+oluşturmaktır.
+
+#### 3. Scikit-learn ve Model Evaluation Metrics
+
+Tahmin performansını değerlendirmek için `scikit-learn` kütüphanesi projeye
+eklendi.
+
+Python içerisindeki import adı:
+
+`sklearn`
+
+olarak kullanılmaktadır.
+
+`sklearn.metrics` modülünden:
+
+- `mean_absolute_error`
+- `root_mean_squared_error`
+
+fonksiyonları kullanıldı.
+
+`metrics` modülünün model tahminlerinin başarısını ölçmek için kullanılan
+değerlendirme fonksiyonlarını içerdiği öğrenildi.
+
+#### 4. MAE Hesaplaması
+
+Naive baseline model için Mean Absolute Error (MAE) hesaplandı.
+
+MAE:
+
+`4.166666666666667`
+
+yaklaşık olarak:
+
+`4.17`
+
+olarak bulundu.
+
+MAE, her tahmin ile gerçek değer arasındaki mutlak farkların ortalamasını
+ifade etmektedir.
+
+Bu sonuç naive baseline modelinin gerçek Google Trends değerlerinden haftalık
+olarak ortalama yaklaşık `4.17` puan saptığını göstermektedir.
+
+Bu değerin yüzde olmadığı, Google Trends'in normalize edilmiş 0–100 ilgi
+ölçeğindeki hata miktarı olduğu not edildi.
+
+#### 5. RMSE Hesaplaması
+
+Naive baseline model için Root Mean Squared Error (RMSE) hesaplandı.
+
+RMSE:
+
+`5.049752469181039`
+
+yaklaşık olarak:
+
+`5.05`
+
+olarak bulundu.
+
+RMSE hesaplamasında tahmin hatalarının kareleri kullanıldığı için büyük
+hatalar MAE'ye göre daha fazla ağırlık almaktadır.
+
+Naive baseline sonuçları:
+
+- MAE: `4.17`
+- RMSE: `5.05`
+
+olarak kaydedildi.
+
+#### 6. Baseline Hata Analizi
+
+Naive baseline modelinin her test haftasındaki mutlak hataları hesaplandı.
+
+En yüksek mutlak hata:
+
+`8`
+
+olarak bulundu.
+
+En yüksek hata tarihi:
+
+`2026-06-28`
+
+olarak tespit edildi.
+
+Bu tarihte:
+
+- Actual value: `65`
+- Naive prediction: `73`
+
+olduğu için:
+
+`|65 - 73| = 8`
+
+puanlık hata oluştu.
+
+Gerçek test verisi ile naive baseline tahminleri aynı grafik üzerinde
+görselleştirildi.
+
+Naive modelin sabit `73` tahmini yaptığı, gerçek serinin özellikle test
+döneminin ortalarında aşağı yönlü hareket etmesi nedeniyle model hatasının
+arttığı gözlemlendi.
+
+#### 7. ARIMA Modeline Giriş
+
+Forecasting için klasik zaman serisi modellerinden ARIMA incelendi.
+
+ARIMA açılımı:
+
+- AR: AutoRegressive
+- I: Integrated
+- MA: Moving Average
+
+olarak ele alındı.
+
+ARIMA modeli:
+
+`ARIMA(p, d, q)`
+
+şeklinde ifade edilmektedir.
+
+Parametrelerin genel anlamları:
+
+- `p`: geçmiş değerlerden kaç lag'in AR kısmında kullanılacağı
+- `d`: serinin kaç kez differencing işleminden geçirileceği
+- `q`: geçmiş tahmin hatalarından kaç lag'in MA kısmında kullanılacağı
+
+olarak öğrenildi.
+
+#### 8. Stationarity ve ADF Testi
+
+ARIMA modelleme öncesinde zaman serisinin stationarity (durağanlık) durumu
+incelendi.
+
+Durağan bir serinin temel davranışının zaman boyunca çok fazla değişmemesi
+gerektiği öğrenildi.
+
+ChatGPT train serisinin grafiğinde zaman içerisinde belirgin bir yükseliş
+bulunduğu için ham serinin durağan olmaması bekleniyordu.
+
+Bu durumu istatistiksel olarak kontrol etmek için Augmented Dickey-Fuller
+(ADF) testi uygulandı.
+
+Ham train serisi için:
+
+- ADF Statistic: `-0.9544902016340422`
+- p-value: `0.7694991558514677`
+
+bulundu.
+
+ADF testinde null hypothesis:
+
+"Seri durağan değildir."
+
+olarak ele alındı.
+
+`p-value > 0.05`
+
+olduğu için null hypothesis reddedilemedi ve ham seri durağan kabul edilmedi.
+
+#### 9. Differencing ve `d` Parametresi
+
+Ham seri durağan olmadığı için birinci dereceden differencing uygulandı.
+
+Pandas içerisinde:
+
+`.diff()`
+
+kullanılarak her haftanın değeri ile bir önceki haftanın değeri arasındaki
+fark hesaplandı.
+
+Differencing sonrası oluşan ilk `NaN` değer `.dropna()` ile kaldırıldı.
+
+Bir kez fark alınmış seri için ADF testi tekrar uygulandı.
+
+Sonuçlar:
+
+- ADF Statistic: `-12.155582728136798`
+- p-value: `1.5348088381376744e-22`
+
+olarak bulundu.
+
+Bu p-value değeri `0.05` değerinden çok daha küçük olduğu için null hypothesis
+reddedildi ve bir kez fark alınmış seri durağan kabul edildi.
+
+Bu nedenle ARIMA için:
+
+`d = 1`
+
+güçlü bir aday olarak belirlendi.
+
+`d` parametresinin p-value'nun kendisini değil, seriyi durağanlaştırmak için
+uygulanan differencing sayısını ifade ettiği öğrenildi.
+
+#### 10. Lag Kavramı
+
+ARIMA parametrelerinin belirlenmesi sırasında lag kavramı incelendi.
+
+Haftalık zaman serisinde:
+
+- Lag 1: 1 hafta önce
+- Lag 2: 2 hafta önce
+- Lag 3: 3 hafta önce
+
+anlamına gelmektedir.
+
+Lag kavramı, mevcut haftadaki değişim ile geçmiş haftalardaki değişimler
+arasındaki ilişkinin incelenmesinde kullanıldı.
+
+#### 11. ACF Analizi
+
+Differencing uygulanmış train serisi üzerinde ACF
+(Autocorrelation Function) grafiği oluşturuldu.
+
+ACF grafiğinde:
+
+- X ekseni lag değerlerini
+- Y ekseni autocorrelation gücünü
+
+göstermektedir.
+
+Grafikteki güven aralığının içinde kalan küçük correlation değerlerinin
+tesadüfi dalgalanmalardan kaynaklanabileceği, güven aralığının dışına çıkan
+değerlerin ise daha dikkat çekici ilişkiler olabileceği incelendi.
+
+Lag 0'ın serinin kendisiyle olan ilişkisini gösterdiği için doğal olarak `1`
+olduğu ve model parametresi seçiminde dikkate alınmadığı öğrenildi.
+
+ACF grafiğinde özellikle Lag 2 civarında negatif ve güven aralığının dışına
+çıkan bir ilişki gözlemlendi.
+
+ACF'nin ARIMA modelindeki `q` parametresi için aday değer üretmede yardımcı
+olabileceği not edildi.
+
+#### 12. PACF Analizi
+
+Differencing uygulanmış seri üzerinde PACF
+(Partial Autocorrelation Function) grafiği oluşturuldu.
+
+PACF'nin ACF'den farklı olarak, aradaki lag'lerin etkilerini ayırdıktan sonra
+belirli bir lag'in mevcut değerle doğrudan ilişkisini ölçmeye çalıştığı
+öğrenildi.
+
+PACF grafiğinde de özellikle Lag 2 dikkat çekici bulundu.
+
+PACF'nin ARIMA modelindeki `p` parametresi için aday değer üretmede yardımcı
+olabileceği incelendi.
+
+ACF ve PACF grafiklerinin kesin `p` ve `q` değerlerini belirlemediği,
+yalnızca denenmesi mantıklı parametreler için yol gösterdiği not edildi.
+
+#### 13. ARIMA(2,1,0) Modeli
+
+İlk ARIMA modeli:
+
+`ARIMA(2,1,0)`
+
+olarak oluşturuldu.
+
+Model sadece train verisi üzerinde `.fit()` kullanılarak eğitildi.
+
+Test döneminin uzunluğu kadar:
+
+`12`
+
+adım ileri tahmin üretildi.
+
+Tahminlerin ilk haftalarda küçük değişimler gösterdiği ancak ileri
+haftalarda yaklaşık `72.87` seviyesinde dengelendiği gözlemlendi.
+
+Model performansı:
+
+- MAE: `4.117325528903795`
+- RMSE: `4.948231609916763`
+
+olarak bulundu.
+
+Bu model naive baseline'dan biraz daha iyi performans gösterdi.
+
+#### 14. Farklı ARIMA Parametrelerinin Test Edilmesi
+
+ACF ve PACF analizlerinden elde edilen adaylar doğrultusunda farklı ARIMA
+konfigürasyonları test edildi.
+
+##### ARIMA(0,1,2)
+
+Sonuçlar:
+
+- MAE: `3.8980385782341416`
+- RMSE: `4.677279114147689`
+
+##### ARIMA(2,1,2)
+
+Sonuçlar:
+
+- MAE: `4.055282453415262`
+- RMSE: `4.872024282019466`
+
+##### ARIMA(1,1,1)
+
+Sonuçlar:
+
+- MAE: `3.7118684310360557`
+- RMSE: `4.510405278230964`
+
+olarak bulundu.
+
+#### 15. Model Karşılaştırması
+
+Naive baseline ve test edilen ARIMA modelleri aynı test verisi üzerinde
+MAE ve RMSE kullanılarak karşılaştırıldı.
+
+Sonuçlar:
+
+| Model | MAE | RMSE |
+|---|---:|---:|
+| ARIMA(1,1,1) | 3.71 | 4.51 |
+| ARIMA(0,1,2) | 3.90 | 4.68 |
+| ARIMA(2,1,2) | 4.06 | 4.87 |
+| ARIMA(2,1,0) | 4.12 | 4.95 |
+| Naive | 4.17 | 5.05 |
+
+Tek 12 haftalık test dönemi üzerinde en düşük MAE ve RMSE:
+
+`ARIMA(1,1,1)`
+
+modelinde elde edildi.
+
+Bu nedenle ARIMA(1,1,1) mevcut test sonuçlarına göre en başarılı aday model
+olarak belirlendi.
+
+Ancak bu model henüz nihai model olarak kabul edilmedi.
+
+Tek bir test dönemindeki başarının farklı zaman dönemlerinde aynı şekilde
+devam edip etmeyeceğinin kontrol edilmesi gerektiği sonucuna ulaşıldı.
+
+### Bugün Öğrenilen Kavramlar
+
+- Forecasting
+- Train set
+- Test set
+- Time series train/test split
+- Random split ve time-based split farkı
+- Baseline model
+- Naive forecast
+- Scikit-learn
+- `sklearn.metrics`
+- Mean Absolute Error (MAE)
+- Root Mean Squared Error (RMSE)
+- Absolute error
+- `mean_absolute_error()`
+- `root_mean_squared_error()`
+- `pd.Series()`
+- `label`
+- `plt.legend()`
+- ARIMA
+- AutoRegressive (AR)
+- Integrated (I)
+- Moving Average (MA)
+- `ARIMA(p,d,q)`
+- Stationarity
+- Augmented Dickey-Fuller test
+- Null hypothesis
+- p-value
+- Differencing
+- `.diff()`
+- Lag
+- ACF
+- Autocorrelation
+- PACF
+- Partial autocorrelation
+- Confidence interval
+- `plot_acf()`
+- `plot_pacf()`
+- `.fit()`
+- `.forecast()`
+- `steps`
+- Model comparison
+- `.sort_values()`
+- `.reset_index()`
+
+### Sonraki Adımlar
+
+- Time-series cross-validation mantığını öğrenmek
+- Expanding window yöntemi ile modeli birden fazla zaman döneminde test etmek
+- ARIMA adaylarının farklı test dönemlerindeki MAE ve RMSE değerlerini
+  karşılaştırmak
+- Tek test dönemine bağlı model seçimi riskini azaltmak
+- Daha güvenilir bir ARIMA modeli belirlemek
+- Seçilen model ile gerçek gelecek dönem için forecast üretmek
+- Daha sonraki aşamada Prophet modeli ile karşılaştırma yapmak
