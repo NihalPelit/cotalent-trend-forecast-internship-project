@@ -116,6 +116,17 @@ trend-forecast-project/
 - Tek bir test döneminin model seçimi için yeterli olmayabileceği değerlendirildi.
 - Bir sonraki aşamada time-series cross-validation ile modellerin farklı zaman dönemlerindeki performanslarının test edilmesine karar verildi.
 
+### 5. Gün
+
+- Time Series Cross-Validation ile modeller birden fazla zaman aralığında değerlendirildi.
+- Yaklaşık 30 günlük tahmin hedefi için 12 fold ve 4 haftalık test periyodu kullanıldı.
+- Naive, ARIMA ve Prophet modelleri MAE ve RMSE metrikleriyle karşılaştırıldı.
+- Prophet için `changepoint_prior_scale` tuning yapıldı ve `1.0` değeri seçildi.
+- En iyi sonuç Prophet (`cps=1.0`) modeliyle elde edildi:
+  - MAE: 4.303
+  - RMSE: 4.826
+- Prophet değerlendirme ve tahmin fonksiyonları `src/forecasting.py` içerisine taşındı.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -145,13 +156,20 @@ Bağımlılıkları yüklemek:
 pip install -r requirements.txt
 ```
 
+
 ## Durum
 
 Proje geliştirme aşamasındadır.
-
 Veri toplama, preprocessing, keşifsel veri analizi, time series decomposition,
-baseline forecasting ve ilk ARIMA modelleme çalışmaları tamamlanmıştır.
+baseline forecasting, ARIMA modelleme ve time-series cross-validation
+çalışmaları tamamlanmıştır.
 
-Mevcut tek-test değerlendirmesinde `ARIMA(1,1,1)` en düşük MAE ve RMSE
-değerlerini vermiştir. Sonraki aşamada time-series cross-validation
-uygulanarak model performansı farklı zaman dönemlerinde doğrulanacaktır.
+Yaklaşık 30 günlük tahmin hedefi için 4 haftalık cross-validation uygulanmış;
+Naive, ARIMA ve Prophet modelleri farklı zaman dönemlerinde karşılaştırılmıştır.
+Prophet modeli için `changepoint_prior_scale` optimizasyonu yapılmış ve
+`cps=1.0` seçilmiştir.
+
+Mevcut cross-validation değerlendirmesinde Prophet (`cps=1.0`) en düşük
+MAE ve RMSE değerlerini vermiştir. Sonraki aşamada lag feature'lar
+oluşturularak XGBoost/LightGBM modelleri geliştirilecek ve mevcut
+zaman serisi modelleriyle karşılaştırılacaktır.

@@ -1023,3 +1023,230 @@ devam edip etmeyeceğinin kontrol edilmesi gerektiği sonucuna ulaşıldı.
 - Daha güvenilir bir ARIMA modeli belirlemek
 - Seçilen model ile gerçek gelecek dönem için forecast üretmek
 - Daha sonraki aşamada Prophet modeli ile karşılaştırma yapmak
+
+
+## Day 5 — 07.08.2026
+
+### Hedefler
+
+- Zaman serisi modellerini tek bir train/test ayrımı yerine birden fazla dönem üzerinde değerlendirmek.
+- Projenin yaklaşık 30 günlük tahmin hedefine uygun bir cross-validation yapısı oluşturmak.
+- Naive, ARIMA ve Prophet modellerini MAE ve RMSE metrikleriyle karşılaştırmak.
+- Prophet modelinin trend değişikliklerine verdiği tepkiyi incelemek ve uygun `changepoint_prior_scale` değerini belirlemek.
+- Tahmin ve değerlendirme fonksiyonlarını `src/forecasting.py` altında modüler hale getirmek.
+
+### Yapılan Çalışmalar
+
+#### 1. Time Series Cross-Validation
+
+Zaman serilerinde verilerin sırası korunarak geçmiş verilerle eğitim, sonraki dönemlerle test yapılması için `TimeSeriesSplit` kullanıldı.
+
+İlk olarak:
+
+- 4 fold
+- Her fold için 12 haftalık test dönemi
+
+kullanıldı.
+
+ARIMA(1,1,1) için fold sonuçları incelendi ve bazı dönemlerde modelin iyi çalışırken bazı dönemlerde, özellikle ani seviye değişimlerinde, daha yüksek hata yaptığı görüldü.
+
+#### 2. 12 Haftalık Model Karşılaştırması
+
+Naive ve farklı ARIMA modelleri karşılaştırıldı:
+
+- ARIMA(1,1,1)
+- ARIMA(0,1,2)
+- ARIMA(2,1,0)
+- ARIMA(2,1,2)
+- Naive
+
+12 haftalık tahminlerde Naive modelin ortalama olarak ARIMA modellerinden daha iyi sonuç verdiği görüldü.
+
+Ancak proje hedefi yaklaşık 30 günlük tahmin olduğu için 12 haftalık horizon yerine daha kısa bir tahmin dönemi kullanılmasına karar verildi.
+
+#### 3. 4 Haftalık Cross-Validation
+
+Haftalık veri kullanıldığı için yaklaşık 30 günlük tahmin hedefi:
+
+- 4 hafta
+- yaklaşık 28 gün
+
+olarak ele alındı.
+
+Toplam değerlendirme dönemini korumak amacıyla:
+
+- `n_splits=12`
+- `test_size=4`
+
+kullanıldı.
+
+Böylece model 12 farklı dönemde, her seferinde sonraki 4 haftayı tahmin ederek değerlendirildi.
+
+#### 4. Naive ve ARIMA Sonuçları
+
+4 haftalık cross-validation sonucunda:
+
+- ARIMA(1,1,1): MAE ≈ 4.409, RMSE ≈ 4.998
+- Naive: MAE ≈ 4.542, RMSE ≈ 5.241
+
+ARIMA(1,1,1), ortalama hata açısından Naive modelden biraz daha iyi performans gösterdi.
+
+Ancak fold bazında incelendiğinde iki modelin de farklı dönemlerde avantajlı olduğu ve ARIMA'nın üstünlüğünün çok büyük olmadığı görüldü.
+
+#### 5. Prophet Modelinin Eklenmesi
+
+Prophet kütüphanesi kuruldu ve model haftalık Google Trends verisine uygulandı.
+
+Prophet için:
+
+- `yearly_seasonality=True`
+- `weekly_seasonality=False`
+- `daily_seasonality=False`
+
+ayarları kullanıldı.
+
+Prophet'in beklediği veri formatı için:
+
+- tarih sütunu `ds`
+- hedef değer `y`
+
+olarak düzenlendi.
+
+#### 6. Prophet 4 Haftalık Cross-Validation
+
+Prophet modeli de aynı 12 fold ve 4 haftalık test yapısıyla değerlendirildi.
+
+Varsayılan:
+
+`changepoint_prior_scale=0.05`
+
+değeriyle Prophet'in ortalama hatasının ARIMA ve Naive modele göre daha yüksek olduğu görüldü.
+
+Bazı foldlarda Prophet çok başarılı olurken bazı foldlarda oldukça yüksek hata yaptı.
+
+#### 7. Prophet Fold Analizi
+
+Özellikle hata oranı yüksek olan Fold 4 ayrıntılı olarak incelendi.
+
+Prophet'in:
+
+- gerçek değerler yaklaşık 75 civarında kalırken
+- trend bileşenini yaklaşık 89–92 seviyelerine taşıdığı
+
+görüldü.
+
+Bu durum Prophet'in geçmişteki yükselen trendi geleceğe fazla güçlü şekilde devam ettirdiğini gösterdi.
+
+Modelin hatasının önemli bölümünün yıllık mevsimsellikten değil, trend tahmininden kaynaklandığı görüldü.
+
+#### 8. `changepoint_prior_scale` Kavramı
+
+`changepoint_prior_scale` parametresinin Prophet'in trend değişikliklerine ne kadar esnek tepki vereceğini belirlediği öğrenildi.
+
+Düşük değerlerde model daha düz ve katı bir trend oluştururken, yüksek değerlerde trend değişikliklerine daha fazla izin vermektedir.
+
+Çok yüksek esneklik ise geçmiş verideki küçük hareketlerin gereğinden fazla öğrenilmesine yol açabileceğinden farklı değerlerin cross-validation ile karşılaştırılması gerektiği görüldü.
+
+#### 9. Prophet Hyperparameter Tuning
+
+Farklı `changepoint_prior_scale` değerleri 12 foldun tamamında test edildi.
+
+İlk testlerde:
+
+- 0.01 → MAE ≈ 12.46
+- 0.05 → MAE ≈ 6.83
+- 0.10 → MAE ≈ 5.92
+- 0.20 → MAE ≈ 5.27
+- 0.50 → MAE ≈ 4.56
+- 1.00 → MAE ≈ 4.30
+
+sonuçları elde edildi.
+
+Daha sonra 1.0 çevresindeki değerler de test edildi.
+
+`1.0` ve `1.25` değerlerinin performanslarının birbirine çok yakın olduğu görüldü.
+
+MAE açısından 1.25 çok küçük bir farkla daha iyi olsa da RMSE açısından 1.0 daha iyi sonuç verdi.
+
+Performans farkı ihmal edilebilir seviyede olduğu için daha sade bir değer olan:
+
+`changepoint_prior_scale=1.0`
+
+seçildi.
+
+#### 10. Nihai Model Karşılaştırması
+
+4 haftalık, 12 fold cross-validation sonucunda:
+
+| Model | MAE | RMSE |
+| --- | ---: | ---: |
+| Prophet (`cps=1.0`) | 4.303 | 4.826 |
+| ARIMA(1,1,1) | 4.409 | 4.998 |
+| Naive | 4.542 | 5.241 |
+
+Şu ana kadar test edilen modeller arasında Prophet (`cps=1.0`) en düşük ortalama MAE ve RMSE değerlerini verdi.
+
+Bununla birlikte modeller arasındaki farkın çok büyük olmadığı göz önünde bulunduruldu.
+
+#### 11. Forecasting Modülünün Geliştirilmesi
+
+`src/forecasting.py` içine zaman serisi modelleri için tekrar kullanılabilir fonksiyonlar eklendi.
+
+Modülde:
+
+- `evaluate_naive_cv()`
+- `evaluate_arima_cv()`
+- `forecast_arima()`
+- `evaluate_prophet_cv()`
+- `forecast_prophet()`
+
+fonksiyonları oluşturuldu.
+
+Prophet fonksiyonunun notebook içindeki sonuçlarıyla `src` içerisindeki fonksiyonun sonuçlarının aynı olduğu doğrulandı.
+
+`evaluate_prophet_cv()` ile:
+
+- MAE = 4.303037
+- RMSE = 4.825669
+
+sonuçları tekrar elde edildi.
+
+#### 12. Güncel Verinin Kontrol Edilmesi
+
+Google Trends verisi güncel tarih aralığıyla tekrar çekildi.
+
+`2026-08-02` haftasının:
+
+`isPartial=True`
+
+olduğu görüldü.
+
+Bu nedenle hafta henüz tamamlanmadığı için bu değer gerçek ve kesin bir gözlem olarak değerlendirmeye dahil edilmedi.
+
+Mevcut son tamamlanmış haftanın verisi kullanılmaya devam edildi.
+
+### Bugün Öğrenilen Kavramlar
+
+- Time Series Cross-Validation
+- Expanding Window
+- Fold
+- Forecast Horizon
+- MAE ve RMSE ile model karşılaştırması
+- Prophet
+- `ds` ve `y` Prophet veri formatı
+- Trend ve seasonality bileşenleri
+- Changepoint
+- `changepoint_prior_scale`
+- Hyperparameter tuning
+- Overfitting
+- Model performansının tek bir test döneminden ziyade birden fazla dönemde değerlendirilmesi
+- `isPartial` Google Trends verisinin anlamı
+- Tahmin kodlarının modüler fonksiyonlara dönüştürülmesi
+
+### Sonraki Adımlar
+
+- `requirements.txt` dosyasını Prophet kurulumu ile güncellemek.
+- README dosyasına Day 5 çalışmalarının kısa özetini eklemek.
+- Prophet, ARIMA ve Naive sonuçlarını proje raporu için saklamak.
+- Bir sonraki aşamada lag feature'lar oluşturarak makine öğrenmesi tabanlı modelleri değerlendirmek.
+- XGBoost/LightGBM sonuçlarını mevcut zaman serisi modelleriyle aynı değerlendirme yöntemi üzerinden karşılaştırmak.
