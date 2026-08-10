@@ -8,13 +8,18 @@ Projenin amacı; zaman serisi verilerini kullanarak teknoloji ve kavramların ge
 
 ## Kullanılan Teknolojiler
 
-* Python
-* Pandas
-* NumPy
-* Pytrends
-* Matplotlib
-* Seaborn
-* Statsmodels
+- Python
+- Pandas
+- NumPy
+- Pytrends
+- Matplotlib
+- Seaborn
+- Statsmodels
+- Prophet
+- XGBoost
+- Scikit-learn
+
+Projenin ilerleyen aşamalarında LightGBM, Plotly ve Streamlit kullanılması planlanmaktadır.
 
 Projenin ilerleyen aşamalarında Prophet, ARIMA/SARIMAX, XGBoost/LightGBM, Plotly ve Streamlit kullanılması planlanmaktadır.
 
@@ -127,6 +132,22 @@ trend-forecast-project/
   - RMSE: 4.826
 - Prophet değerlendirme ve tahmin fonksiyonları `src/forecasting.py` içerisine taşındı.
 
+### 6. Gün
+
+- XGBoost ile lag tabanlı forecasting modeli geliştirildi.
+- 4 lag ve 8 lag yapıları karşılaştırıldı; 8 lag daha iyi performans verdi.
+- `change_1` ve `change_2` feature'ları eklendi.
+- Recursive forecasting ve 12 fold × 4 haftalık time-series cross-validation uygulandı.
+- `max_depth`, `n_estimators` ve `learning_rate` için tuning yapıldı.
+- En iyi XGBoost ayarları:
+  - `n_estimators=300`
+  - `max_depth=2`
+  - `learning_rate=0.03`
+- Final sonuç:
+  - MAE: `4.356`
+  - RMSE: `4.902`
+- XGBoost değerlendirme fonksiyonu `src/forecasting.py` içerisine taşındı.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -159,17 +180,17 @@ pip install -r requirements.txt
 
 ## Durum
 
-Proje geliştirme aşamasındadır.
-Veri toplama, preprocessing, keşifsel veri analizi, time series decomposition,
-baseline forecasting, ARIMA modelleme ve time-series cross-validation
-çalışmaları tamamlanmıştır.
+Veri toplama, preprocessing, EDA, decomposition, ARIMA, Prophet ve XGBoost
+modelleme çalışmaları tamamlanmıştır.
 
-Yaklaşık 30 günlük tahmin hedefi için 4 haftalık cross-validation uygulanmış;
-Naive, ARIMA ve Prophet modelleri farklı zaman dönemlerinde karşılaştırılmıştır.
-Prophet modeli için `changepoint_prior_scale` optimizasyonu yapılmış ve
-`cps=1.0` seçilmiştir.
+Yaklaşık 30 günlük tahmin hedefi için 12 fold × 4 haftalık
+time-series cross-validation kullanılmaktadır.
 
-Mevcut cross-validation değerlendirmesinde Prophet (`cps=1.0`) en düşük
-MAE ve RMSE değerlerini vermiştir. Sonraki aşamada lag feature'lar
-oluşturularak XGBoost/LightGBM modelleri geliştirilecek ve mevcut
-zaman serisi modelleriyle karşılaştırılacaktır.
+Şu ana kadar en iyi sonuçlar Prophet ve tuned XGBoost modellerinden elde
+edilmiştir.
+
+XGBoost lag feature'ları nedeniyle daha kısa bir başlangıç geçmişi kullandığı
+için bir sonraki aşamada Naive, ARIMA, Prophet ve XGBoost aynı tarih aralığında
+yeniden değerlendirilerek final model karşılaştırması yapılacaktır.
+
+Daha sonra aynı pipeline Gemini ve Claude serilerine uygulanacaktır.

@@ -3,6 +3,7 @@ from prophet import Prophet
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
 from statsmodels.tsa.arima.model import ARIMA
+from xgboost import XGBRegressor
 
 
 def evaluate_naive_cv(
@@ -198,3 +199,84 @@ def forecast_prophet(
             "yhat_upper",
         ]
     ].tail(steps)
+
+
+def evaluate_xgb_recursive_with_change(
+    X: pd.DataFrame,
+    y: pd.Series,
+    splitter: TimeSeriesSplit,
+    n_lags: int = 8,
+    max_depth: int = 2,
+    n_estimators: int = 300,
+    learning_rate: float = 0.03,
+) -> pd.DataFrame:
+    """XGBoost modelini recursive time-series CV ile değerlendirir."""
+
+    results = []
+
+    for fold, (train_index, test_index) in enumerate(
+        splitter.split(X),
+        start=1,
+    ):
+        X_train = X.iloc[train_index]
+        y_train = y.iloc[train_index]
+        y_test = y.iloc[test_index]
+
+        model = XGBRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            learning_rate=learning_rate,
+            random_state=42,
+        )
+
+        model.fit(
+            X_train,
+            y_train,
+        )
+
+        history = list(y_train.iloc[-n_lags:])
+
+        predictions = []
+
+        for _ in range(len(y_test)):
+            lag_features = [history[-lag] for lag in range(1, n_lags + 1)]
+
+            change_1 = lag_features[0] - lag_features[1]
+
+            change_2 = lag_features[1] - lag_features[2]
+
+            features = lag_features + [
+                change_1,
+                change_2,
+            ]
+
+            current_features = pd.DataFrame(
+                [features],
+                columns=X.columns,
+            )
+
+            prediction = model.predict(current_features)[0]
+
+            predictions.append(prediction)
+
+            history.append(prediction)
+
+        mae = mean_absolute_error(
+            y_test,
+            predictions,
+        )
+
+        rmse = root_mean_squared_error(
+            y_test,
+            predictions,
+        )
+
+        results.append(
+            {
+                "fold": fold,
+                "MAE": mae,
+                "RMSE": rmse,
+            }
+        )
+
+    return pd.DataFrame(results)

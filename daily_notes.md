@@ -1250,3 +1250,201 @@ Mevcut son tamamlanmış haftanın verisi kullanılmaya devam edildi.
 - Prophet, ARIMA ve Naive sonuçlarını proje raporu için saklamak.
 - Bir sonraki aşamada lag feature'lar oluşturarak makine öğrenmesi tabanlı modelleri değerlendirmek.
 - XGBoost/LightGBM sonuçlarını mevcut zaman serisi modelleriyle aynı değerlendirme yöntemi üzerinden karşılaştırmak.
+
+## Day 6 — 10.08.2026
+
+### Hedefler
+
+- XGBoost ile lag tabanlı zaman serisi tahmin modeli oluşturmak.
+- Farklı lag uzunluklarını karşılaştırmak.
+- Yeni feature'lar ekleyerek model performansını geliştirmek.
+- XGBoost hyperparameter tuning yapmak.
+- Modeli time-series cross-validation ile değerlendirmek.
+- XGBoost evaluation fonksiyonunu `src/forecasting.py` içine taşımak.
+
+### Yapılan Çalışmalar
+
+#### 1. Lag Feature'larının Oluşturulması
+
+ChatGPT Google Trends serisi için önce 4 lag kullanılarak feature set oluşturuldu.
+
+Kullanılan feature'lar:
+
+- `lag_1`
+- `lag_2`
+- `lag_3`
+- `lag_4`
+
+Daha sonra modelin daha uzun geçmişten faydalanıp faydalanmadığını incelemek amacıyla lag sayısı 8'e çıkarıldı.
+
+8 lag kullanıldığında veri seti 149 örneğe düştüğü için 4 lag modeli de aynı 149 tarih aralığına hizalandı. Böylece 4 lag ve 8 lag modelleri aynı eğitim ve test tarihleri üzerinde karşılaştırıldı.
+
+Sonuç:
+
+- 4 Lag MAE ≈ 5.166
+- 8 Lag MAE ≈ 4.552
+
+8 haftalık geçmişin model performansını belirgin şekilde iyileştirdiği görüldü.
+
+#### 2. Recursive Forecasting
+
+XGBoost modeli doğrudan zaman bilgisi kullanmadığı için geçmiş değerler lag feature'ları olarak modele verildi.
+
+4 haftalık tahmin horizonunda recursive forecasting kullanıldı.
+
+İlk tahmin gerçek geçmiş değerlerden oluşturulan lag'lerle yapıldı. Sonraki haftaların tahminlerinde ise önceki tahmin değerleri yeni lag olarak kullanıldı.
+
+Bu yöntem sayesinde model gerçek hayatta 4 haftalık ileri tahmin yapılırken oluşacak koşullara benzer şekilde değerlendirildi.
+
+Bazı fold'larda ilk tahmin hatasının sonraki tahminlere aktarılarak error propagation oluşturabileceği gözlemlendi.
+
+#### 3. Fold Bazlı Analiz
+
+12 fold ve her fold için 4 haftalık test horizonuyla `TimeSeriesSplit` kullanıldı.
+
+Özellikle Fold 1, Fold 2 ve Fold 12 detaylı olarak incelendi.
+
+Fold 2'de 8 lag modeli 4 lag modelinden belirgin şekilde daha iyi performans gösterirken, Fold 12'de 4 lag modeli daha başarılı oldu.
+
+Bu durum daha uzun geçmiş bilgisinin her dönemde aynı miktarda fayda sağlamadığını ancak genel ortalamada 8 lag yapısının daha başarılı olduğunu gösterdi.
+
+#### 4. Change Feature'larının Eklenmesi
+
+8 lag modeline yakın dönem yön değişimini daha açık göstermek için iki yeni feature eklendi:
+
+- `change_1 = lag_1 - lag_2`
+- `change_2 = lag_2 - lag_3`
+
+Sonuçlar:
+
+- 8 Lag MAE ≈ 4.552
+- 8 Lag + Change MAE ≈ 4.536
+
+Change feature'larının küçük fakat olumlu bir katkı sağladığı görüldü.
+
+#### 5. Rolling Mean Denemesi
+
+Son 4 haftanın ortalama seviyesini modele vermek amacıyla `rolling_mean_4` feature'ı test edildi.
+
+Sonuç:
+
+- 8 Lag + Rolling Mean MAE ≈ 4.578
+
+Rolling mean feature'ı MAE açısından iyileşme sağlamadı. Bu nedenle final feature setine dahil edilmedi.
+
+#### 6. max_depth Tuning
+
+8 Lag + Change yapısı sabit tutularak farklı `max_depth` değerleri karşılaştırıldı.
+
+Sonuçlar:
+
+- `max_depth = 2` → MAE ≈ 4.472
+- `max_depth = 3` → MAE ≈ 4.536
+- `max_depth = 4` → MAE ≈ 5.467
+- `max_depth = 5` → MAE ≈ 5.620
+
+En iyi sonuç `max_depth = 2` ile elde edildi.
+
+Daha derin ağaçların küçük veri setinde gereğinden fazla karmaşık modeller oluşturabileceği ve generalization performansını düşürebileceği gözlemlendi.
+
+#### 7. n_estimators Tuning
+
+`max_depth = 2` ve `learning_rate = 0.05` sabit tutularak farklı ağaç sayıları test edildi.
+
+Sonuçlar:
+
+- 50 estimators → MAE ≈ 5.647
+- 100 estimators → MAE ≈ 4.472
+- 200 estimators → MAE ≈ 4.401
+- 300 estimators → MAE ≈ 4.430
+
+Bu aşamada en iyi sonuç `n_estimators = 200` ile elde edildi.
+
+#### 8. learning_rate Tuning
+
+`max_depth = 2` ve `n_estimators = 200` sabit tutularak farklı learning rate değerleri karşılaştırıldı.
+
+En iyi sonuç `learning_rate = 0.05` ile elde edildi.
+
+Daha küçük `learning_rate` değerlerinde 200 ağacın yeterli olmayabileceği, daha yüksek değerlerde ise model performansının bozulduğu gözlemlendi.
+
+#### 9. Final Hyperparameter Grid
+
+`learning_rate` ve `n_estimators` parametrelerinin birbirleriyle ilişkili olması nedeniyle küçük bir final grid denemesi yapıldı.
+
+Test edilen kombinasyonlar:
+
+- `learning_rate`: 0.03, 0.05, 0.10
+- `n_estimators`: 100, 200, 300
+- `max_depth`: 2
+
+En iyi kombinasyon:
+
+- `n_estimators = 300`
+- `max_depth = 2`
+- `learning_rate = 0.03`
+
+Final XGBoost sonucu:
+
+- MAE ≈ 4.356
+- RMSE ≈ 4.902
+
+#### 10. Final XGBoost Yapısı
+
+Final feature seti:
+
+- `lag_1` ... `lag_8`
+- `change_1`
+- `change_2`
+
+
+
+#### 11. Modelin Modüler Hale Getirilmesi
+
+Notebook içinde geliştirilen recursive XGBoost evaluation fonksiyonu `src/forecasting.py` dosyasına taşındı.
+
+Yeni fonksiyon:
+
+`evaluate_xgb_recursive_with_change()`
+
+Fonksiyon içerisinde:
+
+* XGBoost modelinin eğitilmesi,
+* recursive forecast oluşturulması,
+* MAE hesaplanması,
+* RMSE hesaplanması,
+* fold sonuçlarının DataFrame olarak döndürülmesi
+
+işlemleri tek bir yapı altında toplandı.
+
+
+
+## Bugün Öğrenilen Kavramlar
+
+* Lag feature
+* Recursive forecasting
+* Error propagation
+* Feature engineering
+* Change feature
+* Rolling mean
+* XGBoost decision trees
+* Boosting
+* `n_estimators`
+* `max_depth`
+* `learning_rate`
+
+
+* Overfitting
+* Hyperparameter tuning
+* Controlled experiment
+* Time-series cross-validation
+* Fold bazlı model analizi
+* Model fonksiyonlarının modülerleştirilmesi
+
+
+## Sonraki Adımlar
+
+* Naive, ARIMA, Prophet ve tuned XGBoost modellerini tamamen aynı tarih aralığında yeniden değerlendirmek.
+* Modelleri aynı 12 fold $\times$ 4 haftalık test yapısında karşılaştırmak.
+* Final ChatGPT model karşılaştırma tablosunu oluşturmak.
+* Daha sonra aynı pipeline'ı Gemini ve Claude trend serileri üzerinde çalıştırmak.
