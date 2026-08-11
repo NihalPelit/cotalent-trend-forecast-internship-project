@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from prophet import Prophet
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error
@@ -269,6 +270,140 @@ def evaluate_xgb_recursive_with_change(
         rmse = root_mean_squared_error(
             y_test,
             predictions,
+        )
+
+        results.append(
+            {
+                "fold": fold,
+                "MAE": mae,
+                "RMSE": rmse,
+            }
+        )
+
+    return pd.DataFrame(results)
+
+
+def evaluate_ensemble_cv(
+    series,
+    X,
+    y,
+    splitter,
+    n_lags=8,
+    prophet_weight=0.5,
+    xgb_weight=0.5,
+    changepoint_prior_scale=1.0,
+    max_depth=2,
+    n_estimators=300,
+    learning_rate=0.03,
+    random_state=42,
+):
+    """
+    Evaluate a Prophet + XGBoost ensemble using
+    time-series cross-validation.
+    """
+
+    results = []
+
+    for fold, (train_index, test_index) in enumerate(
+        splitter.split(X),
+        start=1,
+    ):
+        # Train ve test bölümlerini al
+
+        X_train = X.iloc[train_index]
+
+        y_train = y.iloc[train_index]
+
+        y_test = y.iloc[test_index]
+
+        # -------------------------
+        # Prophet
+        # -------------------------
+
+        prophet_train = pd.DataFrame(
+            {
+                "ds": y_train.index,
+                "y": y_train.values,
+            }
+        )
+
+        prophet_model = Prophet(
+            changepoint_prior_scale=changepoint_prior_scale,
+        )
+
+        prophet_model.fit(prophet_train)
+
+        prophet_future = pd.DataFrame(
+            {
+                "ds": y_test.index,
+            }
+        )
+
+        prophet_forecast = prophet_model.predict(prophet_future)
+
+        prophet_predictions = prophet_forecast["yhat"].to_numpy()
+
+        # -------------------------
+        # XGBoost
+        # -------------------------
+
+        xgb_model = XGBRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            learning_rate=learning_rate,
+            random_state=random_state,
+        )
+
+        xgb_model.fit(
+            X_train,
+            y_train,
+        )
+
+        history = list(y_train.iloc[-n_lags:])
+
+        xgb_predictions = []
+
+        for _ in range(len(y_test)):
+            lag_features = [history[-lag] for lag in range(1, n_lags + 1)]
+
+            change_1 = lag_features[0] - lag_features[1]
+
+            change_2 = lag_features[1] - lag_features[2]
+
+            features = lag_features + [change_1, change_2]
+
+            current_features = pd.DataFrame(
+                [features],
+                columns=X.columns,
+            )
+
+            prediction = xgb_model.predict(current_features)[0]
+
+            xgb_predictions.append(prediction)
+
+            history.append(prediction)
+
+        # -------------------------
+        # Ensemble
+        # -------------------------
+
+        ensemble_predictions = (
+            prophet_weight * prophet_predictions
+            + xgb_weight * np.array(xgb_predictions)
+        )
+
+        # -------------------------
+        # Hata metrikleri
+        # -------------------------
+
+        mae = mean_absolute_error(
+            y_test,
+            ensemble_predictions,
+        )
+
+        rmse = root_mean_squared_error(
+            y_test,
+            ensemble_predictions,
         )
 
         results.append(

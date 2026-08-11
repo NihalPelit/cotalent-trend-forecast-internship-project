@@ -21,8 +21,6 @@ Projenin amacı; zaman serisi verilerini kullanarak teknoloji ve kavramların ge
 
 Projenin ilerleyen aşamalarında LightGBM, Plotly ve Streamlit kullanılması planlanmaktadır.
 
-Projenin ilerleyen aşamalarında Prophet, ARIMA/SARIMAX, XGBoost/LightGBM, Plotly ve Streamlit kullanılması planlanmaktadır.
-
 ## Proje Yapısı
 
 ```text
@@ -148,6 +146,24 @@ trend-forecast-project/
   - RMSE: `4.902`
 - XGBoost değerlendirme fonksiyonu `src/forecasting.py` içerisine taşındı.
 
+### 7. Gün
+
+- Tüm modeller aynı 149 haftalık tarih aralığında yeniden değerlendirildi.
+- Naive, ARIMA, Prophet ve tuned XGBoost aynı 12 fold × 4 haftalık
+  time-series cross-validation yapısında karşılaştırıldı.
+- Tekil modeller arasında en iyi sonuç Prophet ile elde edildi:
+  - MAE: `4.211`
+  - RMSE: `4.745`
+- Fold bazlı analizde XGBoost'un daha fazla fold kazandığı ancak bazı dönemlerde
+  daha büyük hatalar yaptığı görüldü.
+- Prophet ve XGBoost tahminleri birleştirilerek ensemble model oluşturuldu.
+- Eşit ağırlıklı `%50 Prophet + %50 XGBoost` ensemble en iyi genel sonucu verdi:
+  - MAE: `3.911`
+  - RMSE: `4.520`
+- Farklı ensemble ağırlıkları test edildi ve performans farkları küçük olduğu için
+  daha basit olan `0.5 / 0.5` kombinasyonu seçildi.
+- Ensemble değerlendirme fonksiyonu `src/forecasting.py` içerisine eklendi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -180,17 +196,18 @@ pip install -r requirements.txt
 
 ## Durum
 
-Veri toplama, preprocessing, EDA, decomposition, ARIMA, Prophet ve XGBoost
-modelleme çalışmaları tamamlanmıştır.
+Veri toplama, preprocessing, EDA, decomposition, ARIMA, Prophet, XGBoost ve
+ensemble modelleme çalışmaları tamamlanmıştır.
 
 Yaklaşık 30 günlük tahmin hedefi için 12 fold × 4 haftalık
 time-series cross-validation kullanılmaktadır.
 
-Şu ana kadar en iyi sonuçlar Prophet ve tuned XGBoost modellerinden elde
-edilmiştir.
+Tüm modeller aynı tarih aralığında yeniden değerlendirilmiş ve ChatGPT trend
+serisi için en iyi genel sonuç eşit ağırlıklı Prophet + XGBoost ensemble modeli
+ile elde edilmiştir:
 
-XGBoost lag feature'ları nedeniyle daha kısa bir başlangıç geçmişi kullandığı
-için bir sonraki aşamada Naive, ARIMA, Prophet ve XGBoost aynı tarih aralığında
-yeniden değerlendirilerek final model karşılaştırması yapılacaktır.
+- MAE: `3.911`
+- RMSE: `4.520`
 
-Daha sonra aynı pipeline Gemini ve Claude serilerine uygulanacaktır.
+Bir sonraki aşamada aynı modelleme ve değerlendirme pipeline'ı Gemini ve Claude
+trend serilerine uygulanacaktır.

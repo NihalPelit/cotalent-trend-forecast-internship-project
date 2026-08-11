@@ -1419,7 +1419,7 @@ işlemleri tek bir yapı altında toplandı.
 
 
 
-## Bugün Öğrenilen Kavramlar
+### Bugün Öğrenilen Kavramlar
 
 * Lag feature
 * Recursive forecasting
@@ -1442,9 +1442,179 @@ işlemleri tek bir yapı altında toplandı.
 * Model fonksiyonlarının modülerleştirilmesi
 
 
-## Sonraki Adımlar
+### Sonraki Adımlar
 
 * Naive, ARIMA, Prophet ve tuned XGBoost modellerini tamamen aynı tarih aralığında yeniden değerlendirmek.
 * Modelleri aynı 12 fold $\times$ 4 haftalık test yapısında karşılaştırmak.
 * Final ChatGPT model karşılaştırma tablosunu oluşturmak.
 * Daha sonra aynı pipeline'ı Gemini ve Claude trend serileri üzerinde çalıştırmak.
+
+## Day 7 — 11.08.2026
+
+### Hedefler
+
+- Tüm modelleri aynı tarih aralığında yeniden değerlendirmek.
+- Naive, ARIMA, Prophet ve XGBoost modellerini adil şekilde karşılaştırmak.
+- Modellerin yalnızca ortalama hata değerlerine değil, fold bazlı davranışlarına da bakmak.
+- Prophet ve XGBoost modellerinin birlikte kullanıldığı bir ensemble modeli denemek.
+- Ensemble ağırlıklarının performansa etkisini incelemek.
+
+### Yapılan Çalışmalar
+
+#### 1. Verilerin Aynı Tarih Aralığına Hizalanması
+
+XGBoost modeli 8 lag kullandığı için ilk 8 haftada gerekli feature'lar
+oluşturulamamaktadır.
+
+Bu nedenle 157 haftalık ChatGPT trend serisinin ilk 8 haftası çıkarılarak tüm
+modeller aynı 149 haftalık dönem üzerinde değerlendirilmiştir.
+
+Hizalanmış veri aralığı:
+
+- Başlangıç: 2023-09-24
+- Bitiş: 2026-07-26
+- Toplam gözlem: 149
+
+Cross-validation yapısı:
+
+- `n_splits = 12`
+- `test_size = 4`
+
+Böylece son 48 haftayı kapsayan 12 farklı yaklaşık 1 aylık tahmin dönemi
+değerlendirilmiştir.
+
+#### 2. Modellerin Yeniden Değerlendirilmesi
+
+Tüm modeller aynı veri aralığı ve aynı cross-validation yapısında tekrar
+çalıştırılmıştır.
+
+Sonuçlar:
+
+| Model | MAE | RMSE |
+| --- | ---: | ---: |
+| Naive | 4.542 | 5.241 |
+| ARIMA(1,1,1) | 4.414 | 5.000 |
+| Prophet (`cps=1.0`) | 4.211 | 4.745 |
+| Tuned XGBoost | 4.356 | 4.902 |
+
+Tek başına kullanılan modeller arasında Prophet en düşük ortalama MAE ve RMSE
+değerlerini elde etmiştir.
+
+#### 3. Fold Bazlı Model Analizi
+
+Modellerin her fold'daki MAE değerleri karşılaştırılmıştır.
+
+İlk karşılaştırmada:
+
+- XGBoost 6 fold'da en iyi sonucu vermiştir.
+- Prophet 3 fold'da en iyi sonucu vermiştir.
+- Naive 3 fold'da en iyi sonucu vermiştir.
+- ARIMA hiçbir fold'da doğrudan birinci olmamıştır.
+
+Buna rağmen Prophet'in ortalama MAE değeri XGBoost'tan daha düşüktür.
+
+Bu durum XGBoost'un birçok dönemde çok başarılı olmasına rağmen bazı dönemlerde
+daha büyük hatalar yapmasından kaynaklanmaktadır.
+
+Fold MAE istatistikleri incelendiğinde:
+
+- Prophet MAE standart sapması ≈ 2.814
+- XGBoost MAE standart sapması ≈ 3.544
+
+En kötü fold MAE değerleri:
+
+- Prophet ≈ 8.965
+- XGBoost ≈ 11.560
+
+Medyan MAE değerleri:
+
+- XGBoost ≈ 3.547
+- Prophet ≈ 3.658
+
+Bu sonuçlar XGBoost'un tipik dönemlerde çok güçlü olduğunu ancak performansının
+dönemler arasında daha fazla değiştiğini göstermiştir.
+
+Prophet ise daha düşük ortalama hata ve daha kontrollü en kötü durum
+performansı göstermiştir.
+
+#### 4. Prophet + XGBoost Ensemble Modeli
+
+Prophet ve XGBoost tahminlerinin birbirlerinin hatalarını dengeleyip
+dengeleyemeyeceğini görmek amacıyla eşit ağırlıklı bir ensemble oluşturulmuştur.
+
+Kullanılan formül:
+
+`Ensemble Prediction = 0.5 × Prophet Prediction + 0.5 × XGBoost Prediction`
+
+Ensemble modeli aynı 12-fold ve 4 haftalık cross-validation yapısında
+değerlendirilmiştir.
+
+Sonuç:
+
+- MAE ≈ 3.911
+- RMSE ≈ 4.520
+- Median MAE ≈ 2.342
+- Worst Fold MAE ≈ 8.688
+- Fold MAE Std ≈ 2.928
+
+Ensemble modeli ortalama MAE ve RMSE açısından tüm tekil modellerden daha iyi
+performans göstermiştir.
+
+Ensemble her fold'da doğrudan en iyi model olmamasına rağmen Prophet ve
+XGBoost'un bazı dönemlerde farklı yönlerde hata yapması sayesinde tahminlerin
+ortalaması gerçek değerlere daha fazla yaklaşmıştır.
+
+#### 5. Ensemble Weight Sensitivity
+
+Ensemble'ın belirli bir ağırlık kombinasyonuna aşırı bağımlı olup olmadığını
+görmek için birkaç farklı Prophet/XGBoost ağırlığı test edilmiştir.
+
+| Prophet Weight | XGBoost Weight | MAE | RMSE |
+| ---: | ---: | ---: | ---: |
+| 0.5 | 0.5 | 3.911 | 4.520 |
+| 0.4 | 0.6 | 3.918 | 4.555 |
+| 0.6 | 0.4 | 3.930 | 4.507 |
+| 0.7 | 0.3 | 3.968 | 4.525 |
+
+`0.6 / 0.4` kombinasyonu RMSE açısından çok az daha iyi sonuç vermiştir.
+
+Ancak `0.5 / 0.5` kombinasyonu:
+
+- En düşük MAE değerini vermiştir.
+- RMSE açısından en iyi sonuca çok yakın kalmıştır.
+- Daha basit ve yorumlanabilir bir yapı sunmaktadır.
+
+Bu nedenle final ensemble adayı olarak eşit ağırlıklı `0.5 / 0.5`
+kombinasyonunda kalınmıştır.
+
+### Bugün Öğrenilen Kavramlar
+
+- Modelleri adil karşılaştırmak için aynı tarih aralığı ve aynı test dönemlerinin
+  kullanılması gerektiği.
+- Fold sayısının fazla olmasının her zaman daha iyi değerlendirme anlamına
+  gelmediği.
+- Bir modelin daha fazla fold kazanmasının ortalama olarak en iyi model olduğu
+  anlamına gelmediği.
+- Ortalama MAE'nin tüm dönemlerdeki genel hata seviyesini gösterdiği.
+- Medyan MAE'nin modelin daha tipik dönemlerdeki davranışı hakkında bilgi verdiği.
+- Standart sapmanın model performansının dönemler arasında ne kadar değiştiğini
+  gösterdiği.
+- Worst Fold MAE'nin modelin kötü bir dönemde ne kadar sapabileceğini
+  değerlendirmeye yardımcı olduğu.
+- Ensemble modellerde hata değerlerinin değil, doğrudan model tahminlerinin
+  birleştirildiği.
+- İki model farklı yönlerde hata yaptığında tahmin ortalamasının gerçek değere
+  daha fazla yaklaşabileceği.
+- Ensemble ağırlıklarının küçük bir aralıkta test edilerek modelin ağırlıklara
+  karşı hassasiyetinin incelenebileceği.
+
+### Sonraki Adımlar
+
+- Aynı modelleme ve değerlendirme pipeline'ını Gemini trend serisine uygulamak.
+- Naive, ARIMA, Prophet, XGBoost ve ensemble modellerini Gemini üzerinde
+  karşılaştırmak.
+- Gerekirse Gemini serisi için model parametrelerinin yeniden ayarlanmasını
+  değerlendirmek.
+- Daha sonra aynı analizi Claude trend serisine uygulamak.
+- Farklı trend serilerinde aynı modelin mi yoksa farklı modellerin mi daha iyi
+  çalıştığını karşılaştırmak.
