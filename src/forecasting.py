@@ -119,6 +119,7 @@ def evaluate_prophet_cv(
     series: pd.Series,
     splitter: TimeSeriesSplit,
     changepoint_prior_scale: float = 1.0,
+    yearly_seasonality=True,
 ) -> pd.DataFrame:
     """Prophet modelini time-series cross-validation ile değerlendirir."""
 
@@ -136,7 +137,7 @@ def evaluate_prophet_cv(
         test_df = test.rename("y").reset_index().rename(columns={"date": "ds"})
 
         model = Prophet(
-            yearly_seasonality=True,
+            yearly_seasonality=yearly_seasonality,
             weekly_seasonality=False,
             daily_seasonality=False,
             changepoint_prior_scale=changepoint_prior_scale,
@@ -171,13 +172,14 @@ def forecast_prophet(
     series: pd.Series,
     steps: int,
     changepoint_prior_scale: float = 1.0,
+    yearly_seasonality="auto",
 ) -> pd.DataFrame:
     """Prophet modelini tüm seri üzerinde eğitir ve ileri tahmin üretir."""
 
     data = series.rename("y").reset_index().rename(columns={"date": "ds"})
 
     model = Prophet(
-        yearly_seasonality=True,
+        yearly_seasonality=yearly_seasonality,
         weekly_seasonality=False,
         daily_seasonality=False,
         changepoint_prior_scale=changepoint_prior_scale,
@@ -283,6 +285,122 @@ def evaluate_xgb_recursive_with_change(
     return pd.DataFrame(results)
 
 
+def forecast_xgb_recursive_with_change(
+    series: pd.Series,
+    steps: int,
+    n_lags: int = 8,
+) -> pd.Series:
+    """
+    Forecast future values recursively using XGBoost.
+
+    The model uses:
+    - lag_1 ... lag_8
+    - change_1
+    - change_2
+
+    Parameters
+    ----------
+    series : pd.Series
+        Historical time series.
+
+    steps : int
+        Number of future periods to forecast.
+
+    n_lags : int, default=8
+        Number of lag features.
+
+    Returns
+    -------
+    pd.Series
+        Recursive future forecasts.
+    """
+
+    # --------------------------------------------------
+    # Training data
+    # --------------------------------------------------
+
+    lag_data = pd.DataFrame(
+        {
+            "target": series,
+            **{f"lag_{i}": series.shift(i) for i in range(1, n_lags + 1)},
+        }
+    ).dropna()
+
+    # Change features
+
+    lag_data["change_1"] = lag_data["lag_1"] - lag_data["lag_2"]
+
+    lag_data["change_2"] = lag_data["lag_2"] - lag_data["lag_3"]
+
+    feature_columns = [
+        *[f"lag_{i}" for i in range(1, n_lags + 1)],
+        "change_1",
+        "change_2",
+    ]
+
+    X = lag_data[feature_columns]
+    y = lag_data["target"]
+
+    # --------------------------------------------------
+    # Final XGBoost model
+    # --------------------------------------------------
+
+    model = XGBRegressor(
+        n_estimators=300,
+        max_depth=2,
+        learning_rate=0.03,
+        random_state=42,
+    )
+
+    model.fit(X, y)
+
+    # --------------------------------------------------
+    # Recursive forecasting
+    # --------------------------------------------------
+
+    history = series.astype(float).tolist()
+
+    predictions = []
+
+    for _ in range(steps):
+        lags = [history[-i] for i in range(1, n_lags + 1)]
+
+        feature_row = {f"lag_{i + 1}": lags[i] for i in range(n_lags)}
+
+        feature_row["change_1"] = lags[0] - lags[1]
+
+        feature_row["change_2"] = lags[1] - lags[2]
+
+        X_future = pd.DataFrame(
+            [feature_row],
+            columns=feature_columns,
+        )
+
+        prediction = model.predict(X_future)[0]
+
+        predictions.append(prediction)
+
+        # Tahmin edilen değer geçmişe ekleniyor.
+        # Bir sonraki haftanın lag_1 değeri artık bu tahmin olacak.
+        history.append(prediction)
+
+    # --------------------------------------------------
+    # Future dates
+    # --------------------------------------------------
+
+    future_index = pd.date_range(
+        start=series.index[-1] + pd.Timedelta(weeks=1),
+        periods=steps,
+        freq="W-SUN",
+    )
+
+    return pd.Series(
+        predictions,
+        index=future_index,
+        name="xgb_forecast",
+    )
+
+
 def evaluate_ensemble_cv(
     series,
     X,
@@ -292,6 +410,7 @@ def evaluate_ensemble_cv(
     prophet_weight=0.5,
     xgb_weight=0.5,
     changepoint_prior_scale=1.0,
+    yearly_seasonality="auto",
     max_depth=2,
     n_estimators=300,
     learning_rate=0.03,
@@ -328,6 +447,9 @@ def evaluate_ensemble_cv(
         )
 
         prophet_model = Prophet(
+            yearly_seasonality=yearly_seasonality,
+            weekly_seasonality=False,
+            daily_seasonality=False,
             changepoint_prior_scale=changepoint_prior_scale,
         )
 
@@ -415,3 +537,42 @@ def evaluate_ensemble_cv(
         )
 
     return pd.DataFrame(results)
+
+
+def select_best_model(
+    model_results: dict[str, pd.DataFrame],
+) -> tuple[str, pd.DataFrame]:
+    """
+    Select the forecasting model with the lowest mean MAE.
+
+    Parameters
+    ----------
+    model_results : dict[str, pd.DataFrame]
+        Dictionary containing cross-validation results
+        for each forecasting model.
+
+    Returns
+    -------
+    tuple[str, pd.DataFrame]
+        Name of the best model and a comparison table
+        sorted by mean MAE.
+    """
+
+    comparison = []
+
+    for model_name, results in model_results.items():
+        comparison.append(
+            {
+                "Model": model_name,
+                "Mean_MAE": results["MAE"].mean(),
+                "Mean_RMSE": results["RMSE"].mean(),
+            }
+        )
+
+    comparison_df = pd.DataFrame(comparison)
+
+    comparison_df = comparison_df.sort_values(by="Mean_MAE").reset_index(drop=True)
+
+    best_model = comparison_df.loc[0, "Model"]
+
+    return best_model, comparison_df

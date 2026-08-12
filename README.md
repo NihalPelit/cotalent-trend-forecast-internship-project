@@ -37,8 +37,8 @@ trend-forecast-project/
 ├── daily_notes.md
 └── questions.md
 ```
-
-## İlk Gün Çalışmaları
+## Gün Özetleri
+### İlk Gün Çalışmaları
 
 İlk gün kapsamında:
 
@@ -164,6 +164,31 @@ trend-forecast-project/
   daha basit olan `0.5 / 0.5` kombinasyonu seçildi.
 - Ensemble değerlendirme fonksiyonu `src/forecasting.py` içerisine eklendi.
 
+### 8. Gün
+
+- ChatGPT üzerinde geliştirilen modelleme pipeline'ı Gemini ve Claude trend serilerine uygulandı.
+- Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri aynı 12 fold × 4 haftalık time-series cross-validation yapısında karşılaştırıldı.
+- Gemini için en iyi sonuç ARIMA ile elde edildi:
+  - MAE: `6.582`
+  - RMSE: `7.403`
+- Claude için en iyi sonuç ARIMA ile elde edildi:
+  - MAE: `1.317`
+  - RMSE: `1.535`
+- ChatGPT, Gemini ve Claude sonuçları tek tabloda karşılaştırıldı.
+- ChatGPT için en iyi genel yaklaşım Prophet + XGBoost Ensemble olarak kaldı:
+  - MAE: `3.911`
+  - RMSE: `4.520`
+- Her trend serisi için cross-validation sonuçlarına göre en iyi modeli otomatik seçen `select_best_model()` fonksiyonu geliştirildi.
+- Seçilen modeller kullanılarak gelecek 4 haftalık final tahminler üretildi:
+  - ChatGPT → Ensemble
+  - Gemini → ARIMA
+  - Claude → ARIMA
+- XGBoost için recursive future forecasting yapabilen `forecast_xgb_recursive_with_change()` fonksiyonu geliştirildi.
+- Final tahminler tek tabloda birleştirilerek `reports/` klasörüne kaydedildi.
+- Tahmin dosyalarının isimlerine son gözlem tarihi eklendi:
+  - `final_forecast_as_of_YYYY-MM-DD.csv`
+- Gemini'deki ani trend artışı üzerinden dışsal olayların forecasting modellerine etkisi incelendi ve event-aware forecasting ileriki geliştirme olarak planlandı.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -196,18 +221,18 @@ pip install -r requirements.txt
 
 ## Durum
 
-Veri toplama, preprocessing, EDA, decomposition, ARIMA, Prophet, XGBoost ve
-ensemble modelleme çalışmaları tamamlanmıştır.
+## Durum
 
-Yaklaşık 30 günlük tahmin hedefi için 12 fold × 4 haftalık
-time-series cross-validation kullanılmaktadır.
+Veri toplama, preprocessing, EDA, decomposition ve forecasting modelleme aşamaları tamamlanmıştır.
 
-Tüm modeller aynı tarih aralığında yeniden değerlendirilmiş ve ChatGPT trend
-serisi için en iyi genel sonuç eşit ağırlıklı Prophet + XGBoost ensemble modeli
-ile elde edilmiştir:
+Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri ChatGPT, Gemini ve Claude trend serileri üzerinde aynı 12 fold × 4 haftalık time-series cross-validation yapısıyla değerlendirilmiştir.
 
-- MAE: `3.911`
-- RMSE: `4.520`
+Güncel olarak seçilen modeller:
 
-Bir sonraki aşamada aynı modelleme ve değerlendirme pipeline'ı Gemini ve Claude
-trend serilerine uygulanacaktır.
+- ChatGPT → Prophet + XGBoost Ensemble
+- Gemini → ARIMA
+- Claude → ARIMA
+
+Model seçimi `select_best_model()` fonksiyonu ile otomatikleştirilmiş ve seçilen modeller kullanılarak ileriye dönük 4 haftalık final tahminler üretilmiştir.
+
+Bir sonraki aşamada final forecasting pipeline'ının düzenlenmesi, modellerin kaydedilmesi, event-aware forecasting deneyi ve Streamlit dashboard geliştirilmesi planlanmaktadır.

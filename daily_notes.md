@@ -1618,3 +1618,210 @@ kombinasyonunda kalınmıştır.
 - Daha sonra aynı analizi Claude trend serisine uygulamak.
 - Farklı trend serilerinde aynı modelin mi yoksa farklı modellerin mi daha iyi
   çalıştığını karşılaştırmak.
+
+
+## Day 8 — 12.08.2026
+
+### Hedefler
+
+- Gemini ve Claude trend serilerindeki model karşılaştırmalarını tamamlamak.
+- ChatGPT, Gemini ve Claude sonuçlarını ortak bir tabloda değerlendirmek.
+- Her trend serisi için en başarılı modeli otomatik seçebilen bir yapı oluşturmak.
+- Seçilen modellerle ileriye dönük 4 haftalık tahmin üretmek.
+- Ani dış olayların tahmin modellerine nasıl dahil edilebileceğini değerlendirmek.
+
+### Yapılan Çalışmalar
+
+#### 1. Gemini Model Analizi Tamamlandı
+
+Gemini trend serisi Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri ile aynı time-series cross-validation yapısı altında değerlendirildi.
+
+Gemini serisinde özellikle 2025 Ağustos sonu ve Eylül ayında çok büyük bir trend artışı olduğu görüldü. Araştırma sonucunda bu artışın zamanlamasının Gemini 2.5 Flash Image / Nano Banana ürününün yayınlanması ve viral hale gelmesi ile güçlü biçimde örtüştüğü görüldü.
+
+Bu örnek üzerinden geçmiş trend değerlerini kullanan modellerin, veri içerisinde daha önce işaret bulunmayan dışsal olayları önceden tahmin etmekte zorlanabileceği gözlemlendi.
+
+Gemini için en başarılı model:
+
+- ARIMA Mean MAE: yaklaşık 6.582
+
+oldu.
+
+#### 2. Claude Model Karşılaştırması Yapıldı
+
+Claude trend serisi aynı 12-fold ve 4 haftalık test yapısı kullanılarak değerlendirildi.
+
+Elde edilen Mean MAE sonuçları:
+
+- ARIMA: 1.317
+- Prophet: 1.415
+- Naive: 1.438
+- Ensemble: 1.492
+- XGBoost: 1.701
+
+Genel hata açısından ARIMA en başarılı model oldu.
+
+Fold bazında ise en fazla kazanan model Naive oldu:
+
+- Naive: 6 fold
+- ARIMA: 2 fold
+- XGBoost: 2 fold
+- Prophet: 1 fold
+- Ensemble: 1 fold
+
+Bu analiz sonucunda yalnızca kaç fold kazanıldığına bakmanın yeterli olmadığı; Mean MAE, Median MAE, RMSE ve hata dağılımının birlikte değerlendirilmesi gerektiği görüldü.
+
+#### 3. Prophet Ayarları Standartlaştırıldı
+
+Gemini analizinde Prophet'in `yearly_seasonality=True` ve `"auto"` ayarları arasında bazı fold'larda büyük performans farkı oluştuğu görüldü.
+
+Final model karşılaştırmasında daha tutarlı bir yapı oluşturmak amacıyla Prophet değerlendirmeleri `yearly_seasonality="auto"` kullanılarak standartlaştırıldı.
+
+ChatGPT için Prophet'in yeni Mean MAE değeri:
+
+- Prophet: 4.235
+
+olarak elde edildi.
+
+#### 4. Üç Trend Serisinin Final Model Karşılaştırması Yapıldı
+
+ChatGPT, Gemini ve Claude serileri aynı değerlendirme sistemi altında karşılaştırıldı.
+
+Final Mean MAE sonuçlarına göre:
+
+| Trend | En İyi Yöntem | Mean MAE |
+|---|---|---:|
+| ChatGPT | Ensemble | 3.911 |
+| Gemini | ARIMA | 6.582 |
+| Claude | ARIMA | 1.317 |
+
+ChatGPT serisinde en başarılı tekil model Prophet olsa da Prophet ve XGBoost tahminlerinin %50-%50 birleştirildiği Ensemble yaklaşımı genel olarak daha düşük hata verdi.
+
+Bu sonuç, tek bir forecasting modelinin bütün trend serileri için en iyi seçenek olmadığını gösterdi.
+
+#### 5. Otomatik Model Seçim Fonksiyonu Geliştirildi
+
+`src/forecasting.py` dosyasına `select_best_model()` fonksiyonu eklendi.
+
+Fonksiyon:
+
+1. Modellerin cross-validation sonuçlarını alıyor.
+2. Her model için Mean MAE ve Mean RMSE hesaplıyor.
+3. Sonuçları Mean MAE değerine göre sıralıyor.
+4. En düşük Mean MAE değerine sahip modeli otomatik olarak seçiyor.
+
+ChatGPT üzerinde yapılan test sonucunda fonksiyon doğru şekilde:
+
+`Best model: Ensemble`
+
+sonucunu verdi.
+
+Aynı sistem Gemini ve Claude gibi farklı trend serilerine de uygulanabilecek şekilde oluşturuldu.
+
+#### 6. ARIMA ile Final Gelecek Tahminleri Üretildi
+
+Cross-validation sonrasında seçilen modeller artık geçmiş test dönemleri yerine mevcut tüm veri kullanılarak ileriye dönük tahmin üretmek için kullanıldı.
+
+Gemini için ARIMA tahmini yaklaşık olarak:
+
+- 2026-08-02: 37.82
+- 2026-08-09: 37.85
+- 2026-08-16: 37.85
+- 2026-08-23: 37.85
+
+Claude için ARIMA tahmini yaklaşık olarak:
+
+- 2026-08-02: 16.00
+- 2026-08-09: 16.00
+- 2026-08-16: 16.00
+- 2026-08-23: 16.00
+
+şeklinde gerçekleşti.
+
+Her iki model de mevcut veriye göre yakın dönemde büyük bir değişim öngörmedi.
+
+#### 7. XGBoost İçin Recursive Future Forecast Fonksiyonu Eklendi
+
+Cross-validation sırasında kullanılan recursive XGBoost mantığının gerçek geleceğe tahmin üretebilmesi için yeni bir fonksiyon geliştirildi:
+
+`forecast_xgb_recursive_with_change()`
+
+Fonksiyon:
+
+- son 8 haftalık lag değerlerini,
+- `change_1`,
+- `change_2`
+
+özelliklerini kullanıyor.
+
+Her yeni tahmin bir sonraki haftanın lag değerleri arasına eklenerek recursive şekilde sonraki tahmin üretiliyor.
+
+ChatGPT için elde edilen XGBoost tahminleri yaklaşık olarak:
+
+- 67.73
+- 69.41
+- 70.82
+- 71.22
+
+oldu.
+
+#### 8. ChatGPT Final Ensemble Forecast Oluşturuldu
+
+ChatGPT için Prophet ve XGBoost modellerinin gelecek 4 haftalık tahminleri ayrı ayrı üretildi.
+
+Final tahmin:
+
+`0.5 × Prophet + 0.5 × XGBoost`
+
+formülü ile oluşturuldu.
+
+Yaklaşık Ensemble tahminleri:
+
+- 2026-08-02: 67.18
+- 2026-08-09: 67.98
+- 2026-08-16: 69.11
+- 2026-08-23: 70.09
+
+oldu.
+
+Model, ChatGPT Google Trends ilgisinde hafif yükselen bir hareket öngördü.
+
+#### 9. Final Forecast Tablosu Oluşturuldu
+
+ChatGPT, Gemini ve Claude için seçilen final modellerin tahminleri tek bir DataFrame içerisinde birleştirildi.
+
+Final yapı:
+
+- ChatGPT → Ensemble
+- Gemini → ARIMA
+- Claude → ARIMA
+
+şeklinde oluşturuldu.
+
+Forecast CSV dosyalarının hangi veri tarihine dayanarak üretildiğinin anlaşılabilmesi için dosya isimlerinde son gözlem tarihi kullanılmasına karar verildi.
+
+Örnek:
+
+`final_forecast_as_of_2026-07-26.csv`
+
+### Bugün Öğrenilen Kavramlar
+
+- Bir modelin en fazla fold'u kazanması, genel olarak en iyi model olduğu anlamına gelmeyebilir.
+- Mean MAE, Median MAE, RMSE ve standart sapma farklı performans özelliklerini gösterir.
+- Tek bir forecasting modeli bütün zaman serilerinde en iyi sonucu vermeyebilir.
+- Model seçimi cross-validation performansına göre otomatikleştirilebilir.
+- Cross-validation geçmişteki performansı ölçerken final forecast mevcut tüm veri kullanılarak geleceğe tahmin üretir.
+- Recursive forecasting sırasında önceki tahminler sonraki tahminlerin girdisi haline gelir.
+- Dış dünyadaki ani ürün lansmanları veya viral olaylar yalnızca geçmiş trend değerlerini kullanan modeller tarafından önceden görülemeyebilir.
+- Bilinen ürün lansmanları, haberler veya diğer dış sinyaller gelecekte external/exogenous feature olarak modele eklenebilir.
+- Tahmin sırasında henüz bilinmeyen bir bilginin geçmiş test verisine eklenmesi data leakage oluşturur.
+- Forecast dosyasının veri kesim tarihini dosya adında tutmak farklı tahmin versiyonlarının takip edilmesini kolaylaştırır.
+
+### Sonraki Adımlar
+
+- Google Trends verisini güncelleyerek en güncel haftaları veri setine eklemek.
+- Final forecasting pipeline'ını daha modüler hale getirmek.
+- Seçilen modellerin final çıktılarının kaydedilmesini düzenlemek.
+- Gerekli model nesnelerini `.pkl` formatında kaydetmek.
+- Event-aware forecasting yaklaşımını Gemini / Nano Banana örneği üzerinde kontrollü bir deney olarak test etmek.
+- Event-aware geliştirmeden sonra dashboard ve erken uyarı mekanizmasına geçmek.
+- README, requirements ve GitHub repo içeriğini güncellemek.
