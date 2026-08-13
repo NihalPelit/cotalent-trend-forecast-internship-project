@@ -7,6 +7,27 @@ from statsmodels.tsa.arima.model import ARIMA
 from xgboost import XGBRegressor
 
 
+def clip_predictions(
+    predictions,
+    clip_range: tuple[float, float] | None = None,
+):
+    """
+    Tahminleri belirtilen alt ve üst sınırlar arasında tutar.
+
+    Örneğin Google Trends için:
+    clip_range=(0, 100)
+    """
+
+    if clip_range is None:
+        return predictions
+
+    return np.clip(
+        predictions,
+        clip_range[0],
+        clip_range[1],
+    )
+
+
 def evaluate_naive_cv(
     series: pd.Series,
     splitter: TimeSeriesSplit,
@@ -50,10 +71,37 @@ def evaluate_naive_cv(
     return pd.DataFrame(results)
 
 
+def forecast_naive(
+    series: pd.Series,
+    steps: int,
+) -> pd.Series:
+    """
+    Son gözlenen değeri gelecek dönemler için
+    tahmin olarak kullanır.
+    """
+
+    last_value = series.iloc[-1]
+
+    future_index = pd.date_range(
+        start=series.index[-1] + pd.Timedelta(weeks=1),
+        periods=steps,
+        freq="W-SUN",
+    )
+
+    predictions = pd.Series(
+        last_value,
+        index=future_index,
+        name="naive_forecast",
+    )
+
+    return predictions
+
+
 def evaluate_arima_cv(
     series: pd.Series,
     splitter: TimeSeriesSplit,
     order: tuple[int, int, int],
+    clip_range: tuple[float, float] | None = None,
 ) -> pd.DataFrame:
     """ARIMA modelini time-series cross-validation ile değerlendirir."""
 
@@ -74,6 +122,12 @@ def evaluate_arima_cv(
         fitted_model = model.fit()
 
         prediction = fitted_model.forecast(steps=len(test))
+
+        if clip_range is not None:
+            prediction = prediction.clip(
+                lower=clip_range[0],
+                upper=clip_range[1],
+            )
 
         mae = mean_absolute_error(
             test,
@@ -120,6 +174,7 @@ def evaluate_prophet_cv(
     splitter: TimeSeriesSplit,
     changepoint_prior_scale: float = 1.0,
     yearly_seasonality=True,
+    clip_range: tuple[float, float] | None = None,
 ) -> pd.DataFrame:
     """Prophet modelini time-series cross-validation ile değerlendirir."""
 
@@ -147,14 +202,19 @@ def evaluate_prophet_cv(
 
         forecast = model.predict(test_df[["ds"]])
 
+        prediction = clip_predictions(
+            forecast["yhat"].to_numpy(),
+            clip_range,
+        )
+
         mae = mean_absolute_error(
             test_df["y"],
-            forecast["yhat"],
+            prediction,
         )
 
         rmse = root_mean_squared_error(
             test_df["y"],
-            forecast["yhat"],
+            prediction,
         )
 
         results.append(
@@ -212,6 +272,7 @@ def evaluate_xgb_recursive_with_change(
     max_depth: int = 2,
     n_estimators: int = 300,
     learning_rate: float = 0.03,
+    clip_range: tuple[float, float] | None = None,
 ) -> pd.DataFrame:
     """XGBoost modelini recursive time-series CV ile değerlendirir."""
 
@@ -259,6 +320,15 @@ def evaluate_xgb_recursive_with_change(
             )
 
             prediction = model.predict(current_features)[0]
+
+            if clip_range is not None:
+                prediction = float(
+                    np.clip(
+                        prediction,
+                        clip_range[0],
+                        clip_range[1],
+                    )
+                )
 
             predictions.append(prediction)
 
@@ -415,6 +485,7 @@ def evaluate_ensemble_cv(
     n_estimators=300,
     learning_rate=0.03,
     random_state=42,
+    clip_range: tuple[float, float] | None = None,
 ):
     """
     Evaluate a Prophet + XGBoost ensemble using
@@ -465,6 +536,11 @@ def evaluate_ensemble_cv(
 
         prophet_predictions = prophet_forecast["yhat"].to_numpy()
 
+        prophet_predictions = clip_predictions(
+            prophet_predictions,
+            clip_range,
+        )
+
         # -------------------------
         # XGBoost
         # -------------------------
@@ -501,6 +577,15 @@ def evaluate_ensemble_cv(
 
             prediction = xgb_model.predict(current_features)[0]
 
+            if clip_range is not None:
+                prediction = float(
+                    np.clip(
+                        prediction,
+                        clip_range[0],
+                        clip_range[1],
+                    )
+                )
+
             xgb_predictions.append(prediction)
 
             history.append(prediction)
@@ -514,18 +599,23 @@ def evaluate_ensemble_cv(
             + xgb_weight * np.array(xgb_predictions)
         )
 
+        ensemble_prediction = clip_predictions(
+            ensemble_predictions,
+            clip_range,
+        )
+
         # -------------------------
         # Hata metrikleri
         # -------------------------
 
         mae = mean_absolute_error(
             y_test,
-            ensemble_predictions,
+            ensemble_prediction,
         )
 
         rmse = root_mean_squared_error(
             y_test,
-            ensemble_predictions,
+            ensemble_prediction,
         )
 
         results.append(

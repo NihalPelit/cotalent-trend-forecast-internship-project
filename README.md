@@ -189,6 +189,26 @@ trend-forecast-project/
   - `final_forecast_as_of_YYYY-MM-DD.csv`
 - Gemini'deki ani trend artışı üzerinden dışsal olayların forecasting modellerine etkisi incelendi ve event-aware forecasting ileriki geliştirme olarak planlandı.
 
+### 9. Gün
+
+- Google Trends verisi yeni haftalık verilerle güncellendi.
+- Eski ve yeni veri arasındaki ortak tarihler karşılaştırılarak ölçek farklılıkları incelendi.
+- Geçmiş veri yeniden ölçeklenmeden yalnızca yeni haftaların mevcut veri setine eklenmesine karar verildi.
+- Önceki gün üretilen tahminler yeni gerçekleşen verilerle karşılaştırılarak ilk gerçek future validation gerçekleştirildi.
+- Güncellenmiş veriyle Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri yeniden değerlendirildi.
+- Gemini ARIMA modelinin ani trend artışı sonrasında 100'ün üzerinde gerçek dışı tahminler üretebildiği tespit edildi.
+- Google Trends skorlarının doğal `0–100` aralığı dikkate alınarak bounded forecasting yaklaşımı eklendi.
+- Clipping sonrasında Gemini ARIMA MAE değeri yaklaşık `10.974` değerinden `5.635` değerine düştü.
+- Güncel model karşılaştırması sonucunda seçilen modeller:
+  - ChatGPT → Prophet + XGBoost Ensemble
+  - Gemini → Naive
+  - Claude → Naive
+- Güncellenmiş modeller kullanılarak yeni 4 haftalık final tahminler üretildi.
+- Ani trend değişimlerini tespit etmek amacıyla rolling mean, rolling standard deviation ve anomaly score kullanan ilk anomaly detection prototipi oluşturuldu.
+- Gemini'nin 2025 Ağustos–Eylül dönemindeki ani trend artışı anomaly detection ile tespit edildi.
+- Sıfır standart sapma nedeniyle oluşabilecek `inf` değerleri ve küçük değişimlerden kaynaklanan gereksiz alarmlar incelendi.
+- Anomaly detection için window, threshold ve minimum değişim parametrelerinin ileride optimize edilmesine karar verildi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -221,18 +241,22 @@ pip install -r requirements.txt
 
 ## Durum
 
-## Durum
+Veri toplama, preprocessing, EDA, decomposition ve temel forecasting modelleme aşamaları tamamlanmıştır.
 
-Veri toplama, preprocessing, EDA, decomposition ve forecasting modelleme aşamaları tamamlanmıştır.
+Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri ChatGPT, Gemini ve Claude trend serileri üzerinde 12 fold × 4 haftalık time-series cross-validation yapısıyla değerlendirilmiştir.
 
-Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri ChatGPT, Gemini ve Claude trend serileri üzerinde aynı 12 fold × 4 haftalık time-series cross-validation yapısıyla değerlendirilmiştir.
+Yeni haftalık veriler geldikçe modeller yeniden değerlendirilmekte ve geçmiş tahminler gerçekleşen verilerle doğrulanmaktadır.
+
+Google Trends skorlarının doğal `0–100` aralığı dikkate alınarak bounded forecasting yaklaşımı uygulanmıştır.
 
 Güncel olarak seçilen modeller:
 
 - ChatGPT → Prophet + XGBoost Ensemble
-- Gemini → ARIMA
-- Claude → ARIMA
+- Gemini → Naive
+- Claude → Naive
 
-Model seçimi `select_best_model()` fonksiyonu ile otomatikleştirilmiş ve seçilen modeller kullanılarak ileriye dönük 4 haftalık final tahminler üretilmiştir.
+Seçilen modeller kullanılarak güncel 4 haftalık tahminler üretilmiştir.
 
-Bir sonraki aşamada final forecasting pipeline'ının düzenlenmesi, modellerin kaydedilmesi, event-aware forecasting deneyi ve Streamlit dashboard geliştirilmesi planlanmaktadır.
+Ayrıca ani trend değişimlerini tespit etmek amacıyla anomaly detection çalışmalarına başlanmıştır.
+
+Bir sonraki aşamada anomaly detection yönteminin geliştirilmesi, event-aware forecasting deneyi ve Streamlit dashboard geliştirilmesi planlanmaktadır.

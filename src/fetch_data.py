@@ -63,14 +63,14 @@ def fetch_trends_data(
 
             wait_time = backoff_seconds * (2**attempt)
 
-            print(
-                f"429 hatası alındı. "
-                f"{wait_time} saniye sonra tekrar denenecek."
-            )
+            print(f"429 hatası alındı. {wait_time} saniye sonra tekrar denenecek.")
 
             time.sleep(wait_time)
 
         except ResponseError as error:
+            print("ResponseError type:", type(error).__name__)
+            print("ResponseError detail:", error)
+
             raise RuntimeError(
                 "Google Trends isteği başarısız oldu. "
                 "İstek parametrelerini veya pytrends uyumluluğunu kontrol edin."

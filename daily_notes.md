@@ -1825,3 +1825,279 @@ Forecast CSV dosyalarının hangi veri tarihine dayanarak üretildiğinin anlaş
 - Event-aware forecasting yaklaşımını Gemini / Nano Banana örneği üzerinde kontrollü bir deney olarak test etmek.
 - Event-aware geliştirmeden sonra dashboard ve erken uyarı mekanizmasına geçmek.
 - README, requirements ve GitHub repo içeriğini güncellemek.
+
+## Day 9 — 13.08.2026
+
+### Hedefler
+
+- Google Trends verisini yeni haftalarla güncellemek
+- Önceki gün üretilen tahminleri yeni gerçekleşen verilerle doğrulamak
+- Güncel veriyle modelleri yeniden değerlendirmek
+- Google Trends'in doğal 0–100 sınırını model değerlendirmesine dahil etmek
+- Her trend için güncel en iyi modeli yeniden seçmek
+- Yeni 4 haftalık tahminleri üretmek
+- Anomaly detection için ilk prototipi oluşturmak
+
+
+### Yapılan Çalışmalar
+
+#### 1. Google Trends Verisinin Güncellenmesi
+
+Pytrends üzerinden yeni veri çekilmeye çalışıldı ancak istek sırasında `ResponseError: 400` hatası alındı.
+
+Bu nedenle Google Trends web arayüzünden manuel olarak son 1 yıllık haftalık veri indirildi.
+
+Eski 3 yıllık veri ile yeni indirilen veri arasında ortak tarihler karşılaştırıldı. Aynı tarihlerde küçük değer farklılıkları bulundu.
+
+51 haftalık overlap üzerinde:
+
+- ChatGPT için median scale ratio yaklaşık `1.016`
+- Gemini için median scale ratio `1.0`
+- Claude için median scale ratio `1.0`
+- Tüm seriler için global median scale ratio `1.0`
+
+olarak bulundu.
+
+Global scaling uygulandığında ChatGPT farkı azalırken Gemini ve Claude için farkın arttığı görüldü.
+
+Bu nedenle geçmiş veriyi yeniden ölçeklemek yerine yalnızca yeni haftaların eklenmesine karar verildi.
+
+Yeni eklenen haftalar:
+
+- 2026-08-02
+- 2026-08-09
+
+Güncellenmiş veri seti 157 satırdan 159 satıra çıktı.
+
+
+#### 2. Önceki Tahminlerin Gerçek Verilerle Doğrulanması
+
+Day 8 sonunda 2026-07-26 tarihi itibarıyla üretilen tahminler ile yeni gerçekleşen iki haftalık veriler karşılaştırıldı.
+
+İlk iki haftalık gerçek future validation sonucunda yaklaşık MAE değerleri:
+
+- ChatGPT: `1.598`
+- Gemini: `2.163`
+- Claude: `1.499`
+
+olarak bulundu.
+
+ChatGPT tahmini yükseliş yönünü doğru yakaladı ancak ikinci haftadaki gerçek değerin biraz altında kaldı.
+
+Gemini tahmini yatay seyri doğru yakaladı ancak gerçek seviyenin biraz altında kaldı.
+
+Claude tahmini ise gerçekleşen değerlere oldukça yakın kaldı.
+
+Bu değerlendirme yalnızca iki haftalık gerçek gelecek verisini içerdiği için sonuçların henüz sınırlı olduğu not edildi.
+
+
+#### 3. Güncel Veriyle Modellerin Yeniden Değerlendirilmesi
+
+Güncellenmiş veri kullanılarak aynı cross-validation yapısı tekrar çalıştırıldı:
+
+- `TimeSeriesSplit`
+- 12 fold
+- Her fold için 4 haftalık test dönemi
+- Expanding training window
+
+ChatGPT, Gemini ve Claude için aşağıdaki modeller yeniden değerlendirildi:
+
+- Naive
+- ARIMA
+- Prophet
+- XGBoost
+- Prophet + XGBoost Ensemble
+
+
+#### 4. Gemini ARIMA Fold 1 Probleminin İncelenmesi
+
+Gemini için güncel ARIMA sonucunda Mean MAE değerinin yaklaşık `10.97` seviyesine yükselmesi dikkat çekti.
+
+Fold bazında inceleme yapıldığında problemin büyük ölçüde Fold 1'den kaynaklandığı görüldü.
+
+Fold 1 tahminleri:
+
+| Date | Actual | ARIMA |
+|---|---:|---:|
+| 2025-09-14 | 100 | 104.15 |
+| 2025-09-21 | 60 | 144.57 |
+| 2025-09-28 | 45 | 184.27 |
+| 2025-10-05 | 37 | 223.27 |
+
+ARIMA, eğitim verisinin sonunda görülen hızlı yükselişi geleceğe taşımaya devam ederken gerçek seri zirveden sonra düşüşe geçti.
+
+Google Trends değerlerinin doğal olarak `0–100` arasında olmasına rağmen ARIMA modelinin böyle bir sınırı olmadığı için 100'ün üzerinde tahminler üretebildiği görüldü.
+
+
+#### 5. Bounded Forecast Yaklaşımının Eklenmesi
+
+Google Trends skorlarının doğal veri aralığı dikkate alınarak tahminler için:
+
+`0 <= prediction <= 100`
+
+sınırı uygulanmaya başlandı.
+
+ARIMA Fold 1 sonucu:
+
+- Original MAE: `103.566`
+- Clipped MAE: `39.500`
+
+Tüm Gemini cross-validation sonuçlarında:
+
+- Normal ARIMA MAE: `10.974`
+- Clipped ARIMA MAE: `5.635`
+- Clipped ARIMA RMSE: `6.494`
+
+olarak bulundu.
+
+Clipping, gerçek dışı extrapolation problemini ciddi biçimde azalttı ancak trend dönüşünü tahmin edememe problemini tamamen çözmedi.
+
+Daha sonra aynı 0–100 sınırı Prophet, XGBoost ve Ensemble değerlendirmelerine de eklendi.
+
+
+#### 6. Güncel Model Seçimi
+
+Bounded değerlendirme sonrasında modeller yeniden karşılaştırıldı.
+
+##### ChatGPT
+
+| Model | Mean MAE |
+|---|---:|
+| Ensemble | 3.850 |
+| XGBoost | 3.856 |
+| Prophet | 4.563 |
+| ARIMA | 4.872 |
+| Naive | 5.167 |
+
+Seçilen model:
+
+**Ensemble (Prophet + XGBoost)**
+
+
+##### Gemini
+
+| Model | Mean MAE |
+|---|---:|
+| Naive | 4.333 |
+| ARIMA Clipped | 5.635 |
+| Ensemble Clipped | 6.890 |
+| XGBoost Clipped | 8.278 |
+| Prophet Clipped | 8.315 |
+
+Seçilen model:
+
+**Naive**
+
+
+##### Claude
+
+| Model | Mean MAE |
+|---|---:|
+| Naive | 1.583 |
+| ARIMA | 1.645 |
+| Ensemble | 1.809 |
+| Prophet | 1.820 |
+| XGBoost | 2.005 |
+
+Seçilen model:
+
+**Naive**
+
+Bu sonuç, her trend serisi için aynı modelin kullanılmasının gerekli olmadığını gösterdi.
+
+
+#### 7. Güncellenmiş 4 Haftalık Forecast
+
+Yeni veri ve güncel model seçimleri kullanılarak 4 haftalık tahmin üretildi.
+
+| Date | ChatGPT | Gemini | Claude |
+|---|---:|---:|---:|
+| 2026-08-16 | 70.25 | 40 | 15 |
+| 2026-08-23 | 70.85 | 40 | 15 |
+| 2026-08-30 | 71.37 | 40 | 15 |
+| 2026-09-06 | 72.02 | 40 | 15 |
+
+ChatGPT için Ensemble modeli hafif yükseliş öngördü.
+
+Gemini ve Claude için seçilen Naive modelleri son gözlenen değerin gelecek haftalarda korunacağını tahmin etti.
+
+
+#### 8. Anomaly Detection Prototipi
+
+Tahmin sistemine ek olarak ani trend değişimlerini tespit etmek amacıyla ilk anomaly detection prototipi oluşturuldu.
+
+Gemini serisi üzerinde:
+
+- 8 haftalık rolling mean
+- 8 haftalık rolling standard deviation
+- anomaly score
+
+hesaplandı.
+
+Anomaly score mantığı:
+
+`(Current Value - Rolling Mean) / Rolling Standard Deviation`
+
+şeklinde kuruldu.
+
+Amaç, mevcut haftanın yakın geçmişteki normal davranıştan ne kadar uzak olduğunu ölçmekti.
+
+Gemini'nin 2025 Ağustos–Eylül dönemindeki ani yükselişi güçlü biçimde tespit edildi.
+
+Özellikle:
+
+- 2025-08-31: anomaly score `15.67`
+- 2025-09-07: anomaly score `8.32`
+- 2025-09-14: anomaly score `4.37`
+
+olarak bulundu.
+
+Bu dönem, Gemini trendindeki büyük spike'ın başladığı dönemle örtüştü.
+
+
+#### 9. Anomaly Detection İçin İlk İyileştirme
+
+Tüm veri üzerinde anomaly noktaları görüntülendiğinde bazı eski dönemlerde `inf` değerleri görüldü.
+
+Bunun sebebi, bazı 8 haftalık dönemlerde rolling standard deviation değerinin `0` olmasıydı.
+
+Sıfıra bölme problemini önlemek ve küçük değer değişimlerinin gereksiz alarm üretmesini azaltmak için daha güvenli bir yapı oluşturuldu:
+
+- `WINDOW = 8`
+- `ANOMALY_THRESHOLD = 3`
+- `MIN_ABSOLUTE_CHANGE = 5`
+
+Standart sapmanın 0 olduğu durumlar ayrıca ele alındı.
+
+Bu değerlerin henüz final parametreler olmadığı ve sonraki çalışmalarda farklı window ve threshold değerlerinin karşılaştırılması gerektiği not edildi.
+
+
+### Bugün Öğrenilen Kavramlar
+
+- Yeni veri geldiğinde model performansının değişebileceği
+- Cross-validation fold sınırlarının yeni veri geldikçe kayabileceği
+- Tek bir ekstrem fold'un Mean MAE değerini ciddi biçimde etkileyebileceği
+- Tahmin modellerinde domain bilgisinin önemli olduğu
+- Google Trends için 0–100 prediction constraint uygulanması
+- Clipping'in gerçek dışı extrapolation'ı sınırlandırması
+- Basit modellerin bazı serilerde karmaşık modellerden daha dayanıklı olabileceği
+- Gerçek future validation ile cross-validation arasındaki fark
+- Rolling mean ve rolling standard deviation
+- Z-score tabanlı anomaly detection
+- Anomaly threshold kavramı
+- Sıfır standard deviation nedeniyle oluşan `inf` problemi
+- False alarm azaltmak için minimum absolute change kullanımı
+- Forecasting ile anomaly detection'ın farklı ama tamamlayıcı görevler olduğu
+
+
+### Sonraki Adımlar
+
+- Anomaly detection için farklı window değerlerini karşılaştırmak
+- Anomaly threshold değerini veri üzerinden daha sistematik belirlemek
+- False positive / false negative örneklerini incelemek
+- Anomaly noktalarını grafik üzerinde göstermek
+- Trend spike algılandığında erken uyarı mekanizması oluşturmak
+- Event-aware forecasting yaklaşımını Gemini örneği üzerinde test etmek
+- Bilinen ürün lansmanı / duyuru gibi dış olayları feature olarak eklemeyi araştırmak
+- Final forecasting fonksiyonlarında 0–100 sınırını pipeline seviyesinde standartlaştırmak
+- Dashboard aşamasında forecast ve anomaly bilgilerini birlikte göstermek
