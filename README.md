@@ -209,6 +209,19 @@ trend-forecast-project/
 - Sıfır standart sapma nedeniyle oluşabilecek `inf` değerleri ve küçük değişimlerden kaynaklanan gereksiz alarmlar incelendi.
 - Anomaly detection için window, threshold ve minimum değişim parametrelerinin ileride optimize edilmesine karar verildi.
 
+### 10. Gün
+
+- Anomaly detection sistemi geliştirildi ve rolling window, threshold ve minimum değişim parametreleri karşılaştırıldı.
+- Mevcut prototip için `window=12`, `threshold=3.5` ve `min_absolute_change=5` değerleri seçildi.
+- ChatGPT, Gemini ve Claude için anomaly noktaları tespit edilerek zaman serisi üzerinde görselleştirildi.
+- Güncel trend durumlarını gösteren early-warning ve monitoring çıktısı oluşturuldu.
+- Anomaly tarihleri dış gelişmelerle karşılaştırılarak event validation çalışması yapıldı.
+- Gemini için tarihsel event kataloğu ve event-based feature'lar oluşturuldu.
+- Baseline ve Event-Aware XGBoost modelleri 1 haftalık walk-forward evaluation ile karşılaştırıldı.
+- Event-Aware model event dönemlerinde performans avantajı sağlamadı.
+- `event_recent_4w` feature importance değeri `0.0` olarak bulundu.
+- Mevcut binary event feature yaklaşımının final forecasting pipeline'ına dahil edilmemesine karar verildi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -241,13 +254,11 @@ pip install -r requirements.txt
 
 ## Durum
 
-Veri toplama, preprocessing, EDA, decomposition ve temel forecasting modelleme aşamaları tamamlanmıştır.
+## Durum
 
-Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri ChatGPT, Gemini ve Claude trend serileri üzerinde 12 fold × 4 haftalık time-series cross-validation yapısıyla değerlendirilmiştir.
+Veri toplama, preprocessing, EDA, decomposition ve forecasting modelleme aşamaları tamamlanmıştır.
 
-Yeni haftalık veriler geldikçe modeller yeniden değerlendirilmekte ve geçmiş tahminler gerçekleşen verilerle doğrulanmaktadır.
-
-Google Trends skorlarının doğal `0–100` aralığı dikkate alınarak bounded forecasting yaklaşımı uygulanmıştır.
+Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri ChatGPT, Gemini ve Claude trend serileri üzerinde time-series cross-validation ile değerlendirilmiş ve her trend için en uygun model seçilmiştir.
 
 Güncel olarak seçilen modeller:
 
@@ -255,8 +266,10 @@ Güncel olarak seçilen modeller:
 - Gemini → Naive
 - Claude → Naive
 
-Seçilen modeller kullanılarak güncel 4 haftalık tahminler üretilmiştir.
+Google Trends skorları için `0–100` bounded forecasting yaklaşımı uygulanmakta ve seçilen modellerle 4 haftalık tahminler üretilmektedir.
 
-Ayrıca ani trend değişimlerini tespit etmek amacıyla anomaly detection çalışmalarına başlanmıştır.
+Forecasting pipeline'ına ek olarak anomaly detection ve early-warning prototipi geliştirilmiştir. ChatGPT, Gemini ve Claude için olağan dışı trend hareketleri tespit edilebilmekte ve güncel monitoring durumu oluşturulabilmektedir.
 
-Bir sonraki aşamada anomaly detection yönteminin geliştirilmesi, event-aware forecasting deneyi ve Streamlit dashboard geliştirilmesi planlanmaktadır.
+Event-aware forecasting yaklaşımı deneysel olarak test edilmiş ancak mevcut binary event feature'ının XGBoost performansına anlamlı katkı sağlamadığı görülmüştür. Bu nedenle mevcut event-aware yaklaşım final forecasting modeline dahil edilmemiştir.
+
+Bir sonraki aşamada anomaly ve forecasting çıktılarının dashboard'a hazırlanması, Streamlit geliştirmesi ve final pipeline düzenlemeleri planlanmaktadır.

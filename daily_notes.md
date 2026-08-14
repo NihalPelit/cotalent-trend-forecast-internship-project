@@ -2101,3 +2101,351 @@ Bu değerlerin henüz final parametreler olmadığı ve sonraki çalışmalarda 
 - Bilinen ürün lansmanı / duyuru gibi dış olayları feature olarak eklemeyi araştırmak
 - Final forecasting fonksiyonlarında 0–100 sınırını pipeline seviyesinde standartlaştırmak
 - Dashboard aşamasında forecast ve anomaly bilgilerini birlikte göstermek
+
+
+## Day 10 — 14.08.2026
+
+### Hedefler
+
+- Anomaly detection prototipini geliştirmek
+- Rolling window, anomaly threshold ve minimum değişim parametrelerini karşılaştırmak
+- Anomaly noktalarını görselleştirmek
+- ChatGPT, Gemini ve Claude için güncel monitoring sistemi oluşturmak
+- Event-aware forecasting yaklaşımını deneysel olarak test etmek
+- Event feature'larının XGBoost performansına katkı sağlayıp sağlamadığını incelemek
+
+
+### Yapılan Çalışmalar
+
+#### 1. Anomaly Detection Fonksiyonunun Oluşturulması
+
+Gemini Google Trends serisinde olağan dışı hareketleri tespit etmek amacıyla
+tekrar kullanılabilir `detect_anomalies()` fonksiyonu oluşturuldu.
+
+Fonksiyon içerisinde:
+
+- Rolling mean
+- Rolling standard deviation
+- Absolute change
+- Anomaly score
+- Anomaly flag
+
+hesaplandı.
+
+Anomaly score, mevcut değerin yakın geçmişteki normal davranıştan kaç standart
+sapma uzaklaştığını ölçmek için kullanıldı.
+
+
+#### 2. Rolling Window Karşılaştırması
+
+Anomaly detection için farklı geçmiş pencere uzunlukları test edildi:
+
+- `window=4`
+- `window=8`
+- `window=12`
+
+Sonuçlar:
+
+- `window=4` → 2 anomaly
+- `window=8` → 5 anomaly
+- `window=12` → 4 anomaly
+
+Bilinen Gemini sıçrama döneminde:
+
+- 2025-08-31 → 28
+- 2025-09-07 → 63
+- 2025-09-14 → 100
+
+haftalarının tamamını 8 ve 12 haftalık pencereler yakaladı.
+
+4 haftalık pencerenin yeni yüksek değerlere hızlı adapte olarak son spike haftasını
+kaçırdığı görüldü.
+
+12 haftalık pencere büyük sıçramanın tamamını yakalarken 8 haftalık pencereye
+göre daha az ek alarm üretti.
+
+Bu nedenle mevcut prototip için:
+
+`window = 12`
+
+seçildi.
+
+
+#### 3. Anomaly Threshold Karşılaştırması
+
+`window=12` sabit tutularak farklı threshold değerleri test edildi.
+
+Sonuçlar:
+
+- `threshold=2.0` → 8 anomaly
+- `threshold=2.5` → 6 anomaly
+- `threshold=3.0` → 4 anomaly
+- `threshold=3.5` → 3 anomaly
+
+`threshold=3.5`, bilinen üç büyük Gemini spike haftasının tamamını tespit etti
+ve bu karşılaştırmada ek alarm üretmedi.
+
+Bu nedenle mevcut prototip için:
+
+`threshold = 3.5`
+
+seçildi.
+
+
+#### 4. Minimum Absolute Change Karşılaştırması
+
+Minimum gerçek değişim şartı için:
+
+- `0`
+- `3`
+- `5`
+- `10`
+
+değerleri karşılaştırıldı.
+
+Sonuçlar:
+
+- `0` → 12 anomaly
+- `3` → 3 anomaly
+- `5` → 3 anomaly
+- `10` → 3 anomaly
+
+Minimum değişim şartı kaldırıldığında özellikle standart sapmanın sıfır olduğu
+dönemlerde gereksiz alarmlar oluşabildiği görüldü.
+
+`3`, `5` ve `10` mevcut Gemini spike'ları için aynı sonucu verdi.
+
+Çok düşük veya çok yüksek bir sınır kullanmamak amacıyla mevcut prototipte:
+
+`min_absolute_change = 5`
+
+korundu.
+
+
+#### 5. Final Anomaly Detection Parametreleri
+
+Mevcut prototip için seçilen parametreler:
+
+- `window = 12`
+- `threshold = 3.5`
+- `min_absolute_change = 5`
+
+Bu değerlerin kesin optimum parametreler olmadığı ve daha fazla gerçek event
+incelendikçe yeniden değerlendirilebileceği not edildi.
+
+
+#### 6. Gemini Anomaly Detection Görselleştirmesi
+
+Gemini zaman serisi üzerinde:
+
+- gerçek Google Trends serisi
+- 12 haftalık rolling mean
+- anomaly noktaları
+
+aynı grafikte gösterildi.
+
+Detector özellikle:
+
+- 2025-08-31
+- 2025-09-07
+- 2025-09-14
+
+tarihlerindeki büyük Gemini trend sıçramasını doğru şekilde işaretledi.
+
+
+#### 7. Anomaly Detection'ın Diğer Trendlere Uygulanması
+
+Aynı anomaly detection prototipi ChatGPT ve Claude serilerine de uygulandı.
+
+Tespit edilen anomaly sayıları:
+
+- ChatGPT → 3
+- Gemini → 3
+- Claude → 1
+
+ChatGPT'de hem yukarı hem aşağı yönlü sıra dışı hareketler tespit edildi.
+
+Claude için 2026-03-01 tarihinde yukarı yönlü bir anomaly bulundu.
+
+Aynı parametrelerin farklı serilerde aşırı sayıda alarm üretmediği gözlemlendi,
+ancak parametrelerin bütün trendler için kesin optimum olduğu sonucuna varılmadı.
+
+
+#### 8. Anomaly Event Validation
+
+Anomaly tarihleri dış gelişmelerle karşılaştırıldı.
+
+Bazı anomaly dönemlerinin ürün lansmanları ve yoğun haber dönemleriyle zaman
+olarak örtüştüğü görüldü.
+
+Özellikle ChatGPT'nin 2025-03-30 tarihindeki güçlü pozitif anomaly'si,
+GPT-4o image generation lansmanı ve takip eden viral kullanım dönemiyle
+yakın zamanlı bulundu.
+
+Negatif Christmas dönemi anomaly'lerinde ise olası holiday seasonality etkisi
+değerlendirildi.
+
+Anomaly detection'ın olayların nedenini kanıtlamadığı; yalnızca analistin
+araştırması gereken sıra dışı tarihleri belirlediği vurgulandı.
+
+
+#### 9. Güncel Early-Warning ve Monitoring Sistemi
+
+ChatGPT, Gemini ve Claude için en güncel hafta tek tabloda özetlendi.
+
+2026-08-09 itibarıyla:
+
+- ChatGPT → Anomaly Score ≈ `0.47`
+- Gemini → Anomaly Score ≈ `-0.54`
+- Claude → Anomaly Score ≈ `-1.26`
+
+Üç trend için de `Is_Anomaly=False` sonucu elde edildi.
+
+Böylece güncel haftada güçlü ve olağan dışı bir trend hareketi tespit edilmedi.
+
+Bu yapı ileride Streamlit dashboard üzerinde early-warning sistemi olarak
+kullanılabilecek bir monitoring çıktısı oluşturdu.
+
+
+#### 10. Event-Aware Forecasting Deneyi
+
+Gemini için tarihsel önemli ürün ve model duyurularından oluşan event catalog
+oluşturuldu.
+
+Event tarihleri haftalık Google Trends gözlemleriyle eşleştirildi.
+
+Aşağıdaki event feature'ları üzerinde çalışıldı:
+
+- `event_occurred`
+- `event_count`
+- `event_occurred_lag_1`
+- `event_recent_4w`
+- `event_count_recent_4w`
+
+Data leakage oluşmaması için henüz gerçekleşmemiş event bilgilerinin geçmiş
+tahminlerde kullanılmamasına dikkat edildi.
+
+
+#### 11. Baseline vs Event-Aware XGBoost
+
+Event feature'larının forecasting performansına etkisini test etmek için
+1 haftalık walk-forward evaluation oluşturuldu.
+
+Baseline model:
+
+`lag_1 ... lag_8 + change_1 + change_2`
+
+Event-Aware model:
+
+Baseline feature'ları + `event_recent_4w`
+
+Genel sonuçlar:
+
+- Baseline MAE: `3.087`
+- Event-Aware MAE: `3.064`
+
+İlk bakışta Event-Aware model çok küçük bir iyileşme gösterdi.
+
+
+#### 12. Event ve Normal Dönemlerin Ayrı Analizi
+
+Event dönemleri ayrıca değerlendirildi.
+
+Event dönemleri:
+
+- Baseline MAE: `6.682`
+- Event-Aware MAE: `6.687`
+
+Normal dönemler:
+
+- Baseline MAE: `2.177`
+- Event-Aware MAE: `2.146`
+
+Event-Aware model event dönemlerinde performans avantajı sağlamadı.
+
+Genel MAE'deki küçük iyileşmenin event dönemlerinden değil, normal dönemlerdeki
+küçük tahmin farklılıklarından kaynaklandığı görüldü.
+
+
+#### 13. Event Feature Importance Analizi
+
+Event-Aware XGBoost modelinin feature importance değerleri incelendi.
+
+En önemli feature:
+
+`lag_1 ≈ 0.646`
+
+olarak bulundu.
+
+Buna karşılık:
+
+`event_recent_4w = 0.000`
+
+importance değerine sahipti.
+
+Bu sonuç XGBoost modelinin mevcut binary event feature'ını tahmin kararlarında
+kullanmadığını gösterdi.
+
+Bu nedenle mevcut event-aware yaklaşımın final forecasting pipeline'ına
+eklenmemesine karar verildi.
+
+Bu sonuç dış olayların trendler üzerinde etkili olmadığı anlamına gelmemektedir.
+Mevcut `0/1` event temsilinin farklı event türleri ve büyüklüklerini yeterince
+iyi ifade etmediği değerlendirildi.
+
+
+#### 14. Anomaly Grafiklerinin Geliştirilmesi
+
+ChatGPT, Gemini ve Claude için ayrı anomaly detection grafikleri oluşturuldu.
+
+Grafiklerde:
+
+- gerçek trend
+- rolling mean
+- anomaly noktaları
+- anomaly score değerleri
+
+birlikte gösterildi.
+
+Anomaly score ile Google Trends puan farkının aynı şey olmadığı netleştirildi.
+
+Örneğin ChatGPT'deki `7.70` anomaly score değeri 7.70 Google Trends puanı fark
+anlamına gelmemektedir.
+
+Bu değer, gözlemin geçmiş davranıştan yaklaşık 7.70 standart sapma uzak olduğunu
+göstermektedir.
+
+
+### Bugün Öğrenilen Kavramlar
+
+- Anomaly detection
+- Rolling window seçiminin etkisi
+- Rolling mean ve rolling standard deviation
+- Z-score tabanlı anomaly score
+- Pozitif ve negatif anomaly
+- Anomaly threshold
+- Minimum absolute change
+- Early-warning sistemi
+- Trend monitoring
+- Event validation
+- Event-aware forecasting
+- External / exogenous feature mantığı
+- Data leakage ve event zamanlaması
+- Lagged event feature
+- Walk-forward evaluation
+- Binary event feature'ların sınırlılıkları
+- XGBoost feature importance
+- Bir feature'ın eklenmesinin mutlaka modeli iyileştirmediği
+- Genel performans ile event dönemlerindeki performansın ayrı değerlendirilmesi
+
+
+### Sonraki Adımlar
+
+- Anomaly detection kodunun gerekirse `src/` içerisine taşınması
+- Monitoring ve anomaly sonuçlarının dashboard'a hazırlanması
+- Forecast ve anomaly çıktılarının aynı dashboard üzerinde gösterilmesi
+- Streamlit dashboard geliştirmeye başlanması
+- Final forecasting pipeline'ının düzenlenmesi
+- Model ve rapor çıktılarının organize edilmesi
+- Event-aware forecasting yaklaşımının mevcut binary versiyonunun final modele dahil edilmemesi
+- Daha zengin event veya dışsal veri kaynakları bulunursa event-aware yaklaşımın ileride yeniden değerlendirilmesi
