@@ -8,36 +8,59 @@ Projenin amacı; zaman serisi verilerini kullanarak teknoloji ve kavramların ge
 
 ## Kullanılan Teknolojiler
 
+## Kullanılan Teknolojiler
+
 - Python
 - Pandas
 - NumPy
-- Pytrends
-- Matplotlib
-- Seaborn
-- Statsmodels
+- Pytrends / Google Trends
 - Prophet
-- XGBoost
+- Statsmodels / ARIMA
 - Scikit-learn
+- XGBoost
+- Matplotlib
+- Plotly
+- Streamlit
+- Git / GitHub
 
 Projenin ilerleyen aşamalarında LightGBM, Plotly ve Streamlit kullanılması planlanmaktadır.
 
 ## Proje Yapısı
 
-```text
 trend-forecast-project/
+│
+├── app.py
+│
 ├── data/
 │   ├── raw/
 │   └── processed/
-├── notebooks/
-├── src/
+│       └── google_trends_ai_3y_updated_2026-08-09.csv
+│
 ├── models/
+│   ├── chatgpt_prophet_as_of_2026-08-09.json
+│   ├── chatgpt_xgb_as_of_2026-08-09.json
+│   └── model_metadata_as_of_2026-08-09.json
+│
+├── notebooks/
+│   └── ...
+│
 ├── reports/
-├── README.md
-├── requirements.txt
+│   └── final_forecast_as_of_2026-08-09.csv
+│
+├── src/
+│   ├── fetch_data.py
+│   ├── forecasting.py
+│   ├── monitoring.py
+│   └── pipeline.py
+│
+├── .gitignore
 ├── daily_notes.md
-└── questions.md
-```
+├── questions.md
+├── README.md
+└── requirements.txt
+
 ## Gün Özetleri
+
 ### İlk Gün Çalışmaları
 
 İlk gün kapsamında:
@@ -222,6 +245,25 @@ trend-forecast-project/
 - `event_recent_4w` feature importance değeri `0.0` olarak bulundu.
 - Mevcut binary event feature yaklaşımının final forecasting pipeline'ına dahil edilmemesine karar verildi.
 
+### 11. Gün
+
+- Güncel model seçimleri final konfigürasyon olarak sabitlendi:
+  - ChatGPT → Prophet + XGBoost Ensemble
+  - Gemini → Naive
+  - Claude → Naive
+- `forecasting.py` içerisine tekrar kullanılabilir `train_prophet_model()` ve `train_xgb_model()` fonksiyonları eklendi.
+- Final Prophet ve XGBoost modelleri tüm güncel veri üzerinde eğitildi.
+- Eğitilmiş modeller `models/` klasörüne JSON formatında kaydedildi.
+- Kaydedilen modeller tekrar yüklenerek persistence testi yapıldı ve tahminlerin değişmediği doğrulandı.
+- Model seçimleri, parametreleri ve dosya bilgileri `model_metadata_as_of_2026-08-09.json` içerisinde saklandı.
+- Kaydedilmiş modellerden yeniden training yapmadan tahmin üreten `src/pipeline.py` geliştirildi.
+- 4 haftalık final forecast `reports/final_forecast_as_of_2026-08-09.csv` olarak kaydedildi.
+- Streamlit ve Plotly kullanılarak interaktif Trend Forecast Dashboard geliştirildi.
+- Dashboard'a ChatGPT / Gemini / Claude trend seçimi, model bilgisi, geçmiş veri, final forecast ve tahmin tablosu eklendi.
+- Day 10'da geliştirilen anomaly detection yaklaşımı `src/monitoring.py` içerisine taşındı.
+- Güncel anomaly monitoring ve geçmiş anomaly noktaları dashboard'a entegre edildi.
+- Forecast tabanlı `detect_rising_trend_signal()` fonksiyonu geliştirilerek yükselen trend early-warning mekanizması eklendi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -250,26 +292,32 @@ Bağımlılıkları yüklemek:
 ```bash
 pip install -r requirements.txt
 ```
+Dashboard'u çalıştırmak için proje ana klasöründe:
 
+```bash
+streamlit run app.py
+```
+
+komutu kullanılabilir.
+
+Uygulama varsayılan olarak yerel Streamlit sunucusunda açılır.
 
 ## Durum
 
-## Durum
-
-Veri toplama, preprocessing, EDA, decomposition ve forecasting modelleme aşamaları tamamlanmıştır.
-
-Naive, ARIMA, Prophet, XGBoost ve Ensemble modelleri ChatGPT, Gemini ve Claude trend serileri üzerinde time-series cross-validation ile değerlendirilmiş ve her trend için en uygun model seçilmiştir.
-
-Güncel olarak seçilen modeller:
-
-- ChatGPT → Prophet + XGBoost Ensemble
-- Gemini → Naive
-- Claude → Naive
-
-Google Trends skorları için `0–100` bounded forecasting yaklaşımı uygulanmakta ve seçilen modellerle 4 haftalık tahminler üretilmektedir.
-
-Forecasting pipeline'ına ek olarak anomaly detection ve early-warning prototipi geliştirilmiştir. ChatGPT, Gemini ve Claude için olağan dışı trend hareketleri tespit edilebilmekte ve güncel monitoring durumu oluşturulabilmektedir.
-
-Event-aware forecasting yaklaşımı deneysel olarak test edilmiş ancak mevcut binary event feature'ının XGBoost performansına anlamlı katkı sağlamadığı görülmüştür. Bu nedenle mevcut event-aware yaklaşım final forecasting modeline dahil edilmemiştir.
-
-Bir sonraki aşamada anomaly ve forecasting çıktılarının dashboard'a hazırlanması, Streamlit geliştirmesi ve final pipeline düzenlemeleri planlanmaktadır.
+- Google Trends verisi 2026-08-09 haftasına kadar güncellendi.
+- ChatGPT, Gemini ve Claude için Naive, ARIMA, Prophet, XGBoost ve Ensemble yaklaşımları karşılaştırıldı.
+- Google Trends tahminlerinde doğal `0–100` sınırı uygulanmaktadır.
+- Güncel final modeller:
+  - ChatGPT → Prophet + XGBoost Ensemble
+  - Gemini → Naive
+  - Claude → Naive
+- ChatGPT final Prophet ve XGBoost modelleri kaydedilmiş model artifact'ları olarak saklanmaktadır.
+- Model save/load doğrulamaları başarıyla tamamlandı.
+- Model konfigürasyonu metadata dosyasında saklanmaktadır.
+- Kaydedilmiş modellerden yeniden training yapmadan tahmin üreten final inference pipeline oluşturuldu.
+- Güncel 4 haftalık final forecast çıktısı kaydedildi.
+- Anomaly detection ve güncel monitoring sistemi bulunmaktadır.
+- Forecast tabanlı yükselen trend early-warning mekanizması bulunmaktadır.
+- Streamlit + Plotly tabanlı interaktif dashboard yerelde çalışmaktadır.
+- Event-aware XGBoost yaklaşımı deneysel olarak test edildi ancak mevcut binary event feature yapısı final forecasting pipeline'ına dahil edilmedi.
+- Sonraki aşamada dashboard iyileştirmeleri, uncertainty yaklaşımı, uçtan uca testler ve proje dokümantasyonu üzerinde çalışılacaktır.

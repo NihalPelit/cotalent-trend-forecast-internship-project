@@ -1,0 +1,58 @@
+{
+    "data_cutoff_date": "2026-08-09",
+    "forecast_horizon_weeks": 4,
+    "prediction_range": [
+        0,
+        100
+    ],
+    "chatgpt": {
+        "selected_model": "ensemble",
+        "components": [
+            "prophet",
+            "xgboost"
+        ],
+        "weights": {
+            "prophet": 0.5,
+            "xgboost": 0.5
+        },
+        "prophet": {
+            "changepoint_prior_scale": 1.0,
+            "yearly_seasonality": "auto",
+            "weekly_seasonality": false,
+            "daily_seasonality": false,
+            "model_file": "chatgpt_prophet_as_of_2026-08-09.json"
+        },
+        "xgboost": {
+            "n_lags": 8,
+            "n_estimators": 300,
+            "max_depth": 2,
+            "learning_rate": 0.03,
+            "random_state": 42,
+            "features": [
+                "lag_1",
+                "lag_2",
+                "lag_3",
+                "lag_4",
+                "lag_5",
+                "lag_6",
+                "lag_7",
+                "lag_8",
+                "change_1",
+                "change_2"
+            ],
+            "model_file": "chatgpt_xgb_as_of_2026-08-09.json"
+        },
+        "persistence_test": {
+            "prophet_identical": true,
+            "xgboost_identical": true
+        }
+    },
+    "gemini": {
+        "selected_model": "naive",
+        "last_observed_value": 40.0
+    },
+    "claude": {
+        "selected_model": "naive",
+        "last_observed_value": 15.0
+    }
+}

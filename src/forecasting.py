@@ -228,32 +228,128 @@ def evaluate_prophet_cv(
     return pd.DataFrame(results)
 
 
+def train_prophet_model(
+    series: pd.Series,
+    changepoint_prior_scale: float = 1.0,
+    yearly_seasonality: str | bool = "auto",
+) -> Prophet:
+    """
+    Prophet modelini verilen zaman serisinin tamamı üzerinde eğitir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Eğitilecek zaman serisi.
+
+    changepoint_prior_scale : float, default=1.0
+        Prophet modelinin trend değişimlerine ne kadar
+        esnek tepki vereceğini belirler.
+
+    yearly_seasonality : str | bool, default="auto"
+        Yıllık sezonsallığın kullanılıp kullanılmayacağını belirler.
+
+    Returns
+    -------
+    Prophet
+        Eğitilmiş Prophet model nesnesi.
+    """
+
+    # --------------------------------------------------
+    # Prophet veri formatını hazırlama
+    # --------------------------------------------------
+
+    # Prophet iki özel sütun bekler:
+    #
+    # ds -> tarih
+    # y  -> tahmin edilmeye çalışılan değer
+    #
+    # Bizim serimizde tarih index durumunda olduğu için
+    # reset_index() ile normal sütuna çeviriyoruz.
+    data = series.rename("y").reset_index().rename(columns={"date": "ds"})
+
+    # --------------------------------------------------
+    # Prophet modelini oluşturma
+    # --------------------------------------------------
+
+    model = Prophet(
+        # Daha önce model karşılaştırmalarında kullandığımız
+        # yearly seasonality ayarını koruyoruz.
+        yearly_seasonality=yearly_seasonality,
+        # Verimiz haftalık olduğu için Prophet'in
+        # kendi weekly seasonality özelliğini kullanmıyoruz.
+        weekly_seasonality=False,
+        # Günlük veri kullanmadığımız için
+        # daily seasonality de kapalı.
+        daily_seasonality=False,
+        # Daha önce tuning sonucunda seçtiğimiz
+        # trend esnekliği parametresi.
+        changepoint_prior_scale=changepoint_prior_scale,
+    )
+
+    # --------------------------------------------------
+    # Modeli eğitme
+    # --------------------------------------------------
+
+    # Verilen serinin tamamını kullanarak
+    # Prophet modelini eğitiyoruz.
+    model.fit(data)
+
+    # Tahmin sonucu değil,
+    # eğitilmiş model nesnesini döndürüyoruz.
+    #
+    # Day 11'de bu nesneyi models/ klasörüne
+    # kaydedebilmemiz için buna ihtiyacımız var.
+    return model
+
+
 def forecast_prophet(
     series: pd.Series,
     steps: int,
     changepoint_prior_scale: float = 1.0,
-    yearly_seasonality="auto",
+    yearly_seasonality: str | bool = "auto",
 ) -> pd.DataFrame:
-    """Prophet modelini tüm seri üzerinde eğitir ve ileri tahmin üretir."""
+    """
+    Prophet modelini tüm seri üzerinde eğitir
+    ve ileriye yönelik tahmin üretir.
+    """
 
-    data = series.rename("y").reset_index().rename(columns={"date": "ds"})
+    # --------------------------------------------------
+    # Prophet modelini eğitme
+    # --------------------------------------------------
 
-    model = Prophet(
-        yearly_seasonality=yearly_seasonality,
-        weekly_seasonality=False,
-        daily_seasonality=False,
+    # Model oluşturma ve fit işlemini artık
+    # train_prophet_model() fonksiyonuna bırakıyoruz.
+    #
+    # Böylece aynı training kodunu iki farklı
+    # yerde tekrar etmiyoruz.
+    model = train_prophet_model(
+        series=series,
         changepoint_prior_scale=changepoint_prior_scale,
+        yearly_seasonality=yearly_seasonality,
     )
 
-    model.fit(data)
+    # --------------------------------------------------
+    # Gelecek tarihleri oluşturma
+    # --------------------------------------------------
 
+    # periods=steps:
+    # kaç gelecek hafta tahmin edeceğimizi belirler.
+    #
+    # freq="W-SUN":
+    # haftalık verimizin Pazar tarihli yapısını korur.
     future = model.make_future_dataframe(
         periods=steps,
         freq="W-SUN",
     )
 
+    # --------------------------------------------------
+    # Tahmin oluşturma
+    # --------------------------------------------------
+
     forecast = model.predict(future)
 
+    # Sadece gelecekteki "steps" kadar satırı
+    # ve ihtiyacımız olan sütunları döndürüyoruz.
     return forecast[
         [
             "ds",
@@ -355,115 +451,252 @@ def evaluate_xgb_recursive_with_change(
     return pd.DataFrame(results)
 
 
+def train_xgb_model(
+    series: pd.Series,
+    n_lags: int = 8,
+    max_depth: int = 2,
+    n_estimators: int = 300,
+    learning_rate: float = 0.03,
+    random_state: int = 42,
+) -> XGBRegressor:
+    """
+    Lag ve change feature'larını kullanarak
+    XGBoost modelini tüm seri üzerinde eğitir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Eğitilecek zaman serisi.
+
+    n_lags : int, default=8
+        Modelin kullanacağı geçmiş hafta sayısı.
+
+    max_depth : int, default=2
+        XGBoost ağaçlarının maksimum derinliği.
+
+    n_estimators : int, default=300
+        Kullanılacak toplam boosting ağacı sayısı.
+
+    learning_rate : float, default=0.03
+        Her ağacın modele katkısının büyüklüğü.
+
+    random_state : int, default=42
+        Sonuçların tekrar üretilebilir olmasını sağlar.
+
+    Returns
+    -------
+    XGBRegressor
+        Eğitilmiş XGBoost model nesnesi.
+    """
+
+    # --------------------------------------------------
+    # Lag feature'larını oluşturma
+    # --------------------------------------------------
+
+    # target:
+    # modelin tahmin etmeye çalışacağı gerçek değer.
+    #
+    # lag_1 ... lag_8:
+    # önceki haftaların Google Trends değerleri.
+    lag_data = pd.DataFrame(
+        {
+            "target": series,
+            # Dictionary comprehension kullanarak
+            # lag_1'den lag_8'e kadar sütunları
+            # otomatik oluşturuyoruz.
+            **{
+                f"lag_{i}": series.shift(i)
+                for i in range(
+                    1,
+                    n_lags + 1,
+                )
+            },
+        }
+    ).dropna()
+
+    # --------------------------------------------------
+    # Change feature'larını oluşturma
+    # --------------------------------------------------
+
+    # Son haftalık değişim.
+    lag_data["change_1"] = lag_data["lag_1"] - lag_data["lag_2"]
+
+    # Ondan önceki haftalık değişim.
+    lag_data["change_2"] = lag_data["lag_2"] - lag_data["lag_3"]
+
+    # --------------------------------------------------
+    # Model feature'larını belirleme
+    # --------------------------------------------------
+
+    feature_columns = [
+        *[
+            f"lag_{i}"
+            for i in range(
+                1,
+                n_lags + 1,
+            )
+        ],
+        "change_1",
+        "change_2",
+    ]
+
+    # X:
+    # modelin input olarak göreceği feature'lar.
+    X = lag_data[feature_columns]
+
+    # y:
+    # modelin tahmin etmeyi öğreneceği gerçek değer.
+    y = lag_data["target"]
+
+    # --------------------------------------------------
+    # XGBoost modelini oluşturma
+    # --------------------------------------------------
+
+    model = XGBRegressor(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        learning_rate=learning_rate,
+        random_state=random_state,
+    )
+
+    # --------------------------------------------------
+    # Modeli eğitme
+    # --------------------------------------------------
+
+    model.fit(
+        X,
+        y,
+    )
+
+    # Tahminleri değil,
+    # eğitilmiş XGBoost nesnesini döndürüyoruz.
+    #
+    # Böylece modeli daha sonra JSON/UBJ olarak
+    # models/ klasörüne kaydedebiliriz.
+    return model
+
+
 def forecast_xgb_recursive_with_change(
     series: pd.Series,
     steps: int,
     n_lags: int = 8,
 ) -> pd.Series:
     """
-    Forecast future values recursively using XGBoost.
+    Eğitilmiş XGBoost mantığını kullanarak
+    geleceği recursive şekilde tahmin eder.
 
-    The model uses:
-    - lag_1 ... lag_8
+    Model feature'ları:
+
+    - lag_1 ... lag_n
     - change_1
     - change_2
-
-    Parameters
-    ----------
-    series : pd.Series
-        Historical time series.
-
-    steps : int
-        Number of future periods to forecast.
-
-    n_lags : int, default=8
-        Number of lag features.
-
-    Returns
-    -------
-    pd.Series
-        Recursive future forecasts.
     """
 
     # --------------------------------------------------
-    # Training data
+    # Final XGBoost modelini eğitme
     # --------------------------------------------------
 
-    lag_data = pd.DataFrame(
-        {
-            "target": series,
-            **{f"lag_{i}": series.shift(i) for i in range(1, n_lags + 1)},
-        }
-    ).dropna()
+    # Model training işlemini artık ayrı
+    # train_xgb_model() fonksiyonuna bırakıyoruz.
+    model = train_xgb_model(
+        series=series,
+        n_lags=n_lags,
+    )
 
-    # Change features
+    # --------------------------------------------------
+    # Feature isimlerini oluşturma
+    # --------------------------------------------------
 
-    lag_data["change_1"] = lag_data["lag_1"] - lag_data["lag_2"]
-
-    lag_data["change_2"] = lag_data["lag_2"] - lag_data["lag_3"]
-
+    # Eğitilen modelde kullanılan sütunların
+    # sırasını burada da aynı şekilde oluşturuyoruz.
     feature_columns = [
-        *[f"lag_{i}" for i in range(1, n_lags + 1)],
+        *[
+            f"lag_{i}"
+            for i in range(
+                1,
+                n_lags + 1,
+            )
+        ],
         "change_1",
         "change_2",
     ]
 
-    X = lag_data[feature_columns]
-    y = lag_data["target"]
-
     # --------------------------------------------------
-    # Final XGBoost model
+    # Recursive forecasting için geçmişi hazırlama
     # --------------------------------------------------
 
-    model = XGBRegressor(
-        n_estimators=300,
-        max_depth=2,
-        learning_rate=0.03,
-        random_state=42,
-    )
-
-    model.fit(X, y)
-
-    # --------------------------------------------------
-    # Recursive forecasting
-    # --------------------------------------------------
-
+    # Tüm geçmiş değerleri float listeye çeviriyoruz.
+    #
+    # Recursive tahmin sırasında yeni tahminleri
+    # bu listenin sonuna ekleyeceğiz.
     history = series.astype(float).tolist()
 
+    # Gelecek tahminler burada tutulacak.
     predictions = []
 
+    # --------------------------------------------------
+    # Her gelecek hafta için tahmin üretme
+    # --------------------------------------------------
+
+    # range(steps):
+    # Kaç hafta tahmin istiyorsak döngü o kadar çalışır.
     for _ in range(steps):
-        lags = [history[-i] for i in range(1, n_lags + 1)]
+        # Son n_lags haftayı alıyoruz.
+        #
+        # İlk değer lag_1,
+        # ikinci değer lag_2 ...
+        lags = [
+            history[-i]
+            for i in range(
+                1,
+                n_lags + 1,
+            )
+        ]
+
+        # --------------------------------------------------
+        # Gelecek satırın feature'larını oluşturma
+        # --------------------------------------------------
 
         feature_row = {f"lag_{i + 1}": lags[i] for i in range(n_lags)}
 
+        # Son iki haftanın değişimi.
         feature_row["change_1"] = lags[0] - lags[1]
 
+        # Ondan önceki değişim.
         feature_row["change_2"] = lags[1] - lags[2]
 
+        # Model tek satırlık bir DataFrame bekliyor.
         X_future = pd.DataFrame(
             [feature_row],
             columns=feature_columns,
         )
 
+        # Bir sonraki hafta için tahmin oluşturuyoruz.
         prediction = model.predict(X_future)[0]
 
+        # Tahmini sonuç listesine ekliyoruz.
         predictions.append(prediction)
 
-        # Tahmin edilen değer geçmişe ekleniyor.
-        # Bir sonraki haftanın lag_1 değeri artık bu tahmin olacak.
+        # Recursive forecasting'in kritik kısmı:
+        #
+        # Tahmin edilen değeri geçmişe ekliyoruz.
+        #
+        # Bir sonraki döngüde bu değer artık
+        # yeni lag_1 olarak kullanılacak.
         history.append(prediction)
 
     # --------------------------------------------------
-    # Future dates
+    # Gelecek haftaların tarihlerini oluşturma
     # --------------------------------------------------
 
     future_index = pd.date_range(
-        start=series.index[-1] + pd.Timedelta(weeks=1),
+        start=(series.index[-1] + pd.Timedelta(weeks=1)),
         periods=steps,
         freq="W-SUN",
     )
 
+    # Tahminleri tarih index'ine sahip
+    # pandas Series olarak döndürüyoruz.
     return pd.Series(
         predictions,
         index=future_index,

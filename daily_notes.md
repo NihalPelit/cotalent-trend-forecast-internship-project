@@ -2102,7 +2102,6 @@ Bu değerlerin henüz final parametreler olmadığı ve sonraki çalışmalarda 
 - Final forecasting fonksiyonlarında 0–100 sınırını pipeline seviyesinde standartlaştırmak
 - Dashboard aşamasında forecast ve anomaly bilgilerini birlikte göstermek
 
-
 ## Day 10 — 14.08.2026
 
 ### Hedefler
@@ -2449,3 +2448,600 @@ göstermektedir.
 - Model ve rapor çıktılarının organize edilmesi
 - Event-aware forecasting yaklaşımının mevcut binary versiyonunun final modele dahil edilmemesi
 - Daha zengin event veya dışsal veri kaynakları bulunursa event-aware yaklaşımın ileride yeniden değerlendirilmesi
+
+
+## Day 11 — 17.08.2026
+
+### Hedefler
+
+- Güncel final model seçimlerini sabitlemek
+- Final Prophet ve XGBoost modellerini tüm güncel veri üzerinde eğitmek
+- Eğitilmiş model nesnelerini `models/` klasörüne kaydetmek
+- Kaydedilen modelleri tekrar yükleyerek doğrulamak
+- Model konfigürasyonlarını metadata olarak saklamak
+- Kaydedilmiş modellerden yeniden eğitim yapmadan tahmin üreten final pipeline oluşturmak
+- Final 4 haftalık forecast çıktısını kaydetmek
+- Streamlit ve Plotly kullanarak interaktif dashboard geliştirmek
+- Anomaly detection kodunu modüler hale getirerek dashboard'a bağlamak
+- Forecast tabanlı early-warning mekanizması oluşturmak
+
+
+### Yapılan Çalışmalar
+
+#### 1. Final Model Seçimlerinin Sabitlenmesi
+
+2026-08-09 tarihine kadar olan güncel Google Trends verisi kullanıldı.
+
+Güncel veri seti toplam 159 haftalık gözlem içermektedir.
+
+Önceki Time-Series Cross-Validation sonuçlarına göre final model seçimleri:
+
+- ChatGPT → Prophet + XGBoost Ensemble
+- Gemini → Naive
+- Claude → Naive
+
+olarak sabitlendi.
+
+ChatGPT Ensemble için:
+
+- Prophet ağırlığı → `0.5`
+- XGBoost ağırlığı → `0.5`
+
+olarak kullanılmaya devam edildi.
+
+Final XGBoost parametreleri:
+
+- `n_lags = 8`
+- `n_estimators = 300`
+- `max_depth = 2`
+- `learning_rate = 0.03`
+- `random_state = 42`
+
+Final XGBoost feature seti:
+
+- `lag_1 ... lag_8`
+- `change_1`
+- `change_2`
+
+Prophet tarafında:
+
+- `changepoint_prior_scale = 1.0`
+- `yearly_seasonality = "auto"`
+
+ayarları kullanıldı.
+
+
+#### 2. Model Training Fonksiyonlarının `forecasting.py` İçerisine Taşınması
+
+Final modelleri notebook içerisinde tekrar oluşturmak yerine model training
+işlemlerinin modüler fonksiyonlara ayrılmasına karar verildi.
+
+`src/forecasting.py` içerisine:
+
+- `train_prophet_model()`
+- `train_xgb_model()`
+
+fonksiyonları eklendi.
+
+`train_prophet_model()`:
+
+- zaman serisini Prophet'in beklediği `ds` ve `y` formatına dönüştürüyor
+- Prophet modelini oluşturuyor
+- modeli verilen serinin tamamı üzerinde eğitiyor
+- eğitilmiş Prophet model nesnesini döndürüyor
+
+`train_xgb_model()`:
+
+- lag feature'larını oluşturuyor
+- `change_1` ve `change_2` feature'larını hesaplıyor
+- XGBoost training verisini hazırlıyor
+- modeli final parametrelerle eğitiyor
+- eğitilmiş `XGBRegressor` nesnesini döndürüyor
+
+Mevcut `forecast_prophet()` ve `forecast_xgb_recursive_with_change()`
+fonksiyonları da bu training fonksiyonlarını kullanacak şekilde düzenlendi.
+
+Böylece aynı model oluşturma ve `fit()` kodunun farklı yerlerde tekrar
+edilmesi azaltıldı.
+
+
+#### 3. Final Modellerin Tüm Güncel Veri Üzerinde Eğitilmesi
+
+ChatGPT final Ensemble modelinin iki bileşeni olan Prophet ve XGBoost,
+güncel ChatGPT serisinin tamamı kullanılarak yeniden eğitildi.
+
+Bu aşamada amaç tekrar model karşılaştırması yapmak değildi.
+
+Cross-validation ile model seçimi daha önce tamamlandığı için burada amaç:
+
+seçilmiş modelleri mevcut tüm veri üzerinde eğiterek gerçek gelecek
+tahminlerinde kullanılabilecek final model nesnelerini oluşturmaktı.
+
+
+#### 4. Final Modellerin Kaydedilmesi
+
+Eğitilmiş modellerin program kapatıldıktan sonra da tekrar kullanılabilmesi
+için model persistence işlemleri yapıldı.
+
+Prophet modeli:
+
+`models/chatgpt_prophet_as_of_2026-08-09.json`
+
+dosyasına kaydedildi.
+
+XGBoost modeli:
+
+`models/chatgpt_xgb_as_of_2026-08-09.json`
+
+dosyasına kaydedildi.
+
+Prophet için kendi JSON serialization yöntemi kullanıldı.
+
+XGBoost için `save_model()` yöntemi kullanıldı.
+
+Böylece modellerin daha sonra tekrar training yapılmadan yüklenebilmesi
+amaçlandı.
+
+
+#### 5. Model Persistence Doğrulaması
+
+Model dosyalarının yalnızca oluşturulmuş olması yeterli kabul edilmedi.
+
+Prophet modeli JSON dosyasından tekrar yüklendi ve orijinal modelle aynı
+gelecek tarihler üzerinde tahmin üretildi.
+
+Sonuç:
+
+`Prophet predictions identical: True`
+
+XGBoost modeli de JSON dosyasından tekrar yüklendi ve orijinal modelle aynı
+feature girdisi üzerinde tahmin üretildi.
+
+Sonuç:
+
+`XGBoost predictions identical: True`
+
+Böylece:
+
+training → save → load → predict
+
+işlem zincirinin her iki model için de doğru çalıştığı doğrulandı.
+
+
+#### 6. JSON ve Metadata Yapısının İncelenmesi
+
+Model saklama aşamasında JSON formatının amacı ayrıca incelendi.
+
+JSON'un yapılandırılmış bilgiyi insan tarafından okunabilir ve farklı
+programlama dilleri tarafından işlenebilir şekilde saklamak için kullanılan
+bir veri formatı olduğu öğrenildi.
+
+Model dosyalarının yanında ayrıca:
+
+`models/model_metadata_as_of_2026-08-09.json`
+
+dosyası oluşturuldu.
+
+Metadata'nın modelin kendisi değil, model hakkında bilgi taşıyan üst veri
+olduğu netleştirildi.
+
+Metadata içerisinde:
+
+- veri kesim tarihi
+- forecast horizon
+- Google Trends tahmin aralığı
+- trend bazında seçilen modeller
+- Ensemble ağırlıkları
+- Prophet parametreleri
+- XGBoost parametreleri
+- XGBoost feature isimleri
+- model dosyalarının isimleri
+- persistence test sonuçları
+- Gemini ve Claude için gerekli son gözlenen değerler
+
+saklandı.
+
+Bu yapı model konfigürasyonunun daha sonra anlaşılmasını ve yeniden
+üretilebilirliğini kolaylaştırmaktadır.
+
+
+#### 7. Final Forecasting Pipeline'ın Oluşturulması
+
+Kaydedilmiş modellerin notebook dışından kullanılabilmesi amacıyla:
+
+`src/pipeline.py`
+
+dosyası oluşturuldu.
+
+Pipeline içerisinde:
+
+- `load_model_metadata()`
+- `load_prophet_model()`
+- `load_xgb_model()`
+- `forecast_prophet_loaded()`
+- `forecast_xgb_loaded()`
+- `forecast_naive_loaded()`
+- `generate_final_forecast()`
+
+fonksiyonları geliştirildi.
+
+`generate_final_forecast()`:
+
+1. Metadata dosyasını yüklüyor.
+2. Veri tarihi ile model eğitim tarihini karşılaştırıyor.
+3. Kaydedilmiş Prophet modelini yüklüyor.
+4. Kaydedilmiş XGBoost modelini yüklüyor.
+5. ChatGPT için Prophet ve XGBoost tahminlerini birleştiriyor.
+6. Gemini için Naive forecast üretiyor.
+7. Claude için Naive forecast üretiyor.
+8. Üç trendin tahminlerini tek DataFrame olarak döndürüyor.
+
+Bu yapı sayesinde final tahmin üretmek için Prophet ve XGBoost modellerinin
+her seferinde yeniden eğitilmesine gerek kalmadı.
+
+
+#### 8. Kaydedilmiş Modellerle Final Forecast Üretilmesi
+
+Yeni pipeline kaydedilmiş model dosyaları kullanılarak çalıştırıldı.
+
+Elde edilen final tahminler:
+
+| Tarih | ChatGPT | Gemini | Claude |
+|---|---:|---:|---:|
+| 2026-08-16 | 70.248219 | 40.0 | 15.0 |
+| 2026-08-23 | 70.850414 | 40.0 | 15.0 |
+| 2026-08-30 | 71.373637 | 40.0 | 15.0 |
+| 2026-09-06 | 72.022927 | 40.0 | 15.0 |
+
+Kaydedilmiş modellerden üretilen tahminlerin, daha önce doğrudan model
+eğitimiyle elde edilen final tahminlerle aynı olduğu görüldü.
+
+Bu sonuç final inference pipeline'ın doğru çalıştığını doğruladı.
+
+
+#### 9. Final Forecast Çıktısının Kaydedilmesi
+
+Üretilen 4 haftalık final forecast:
+
+`reports/final_forecast_as_of_2026-08-09.csv`
+
+dosyasına kaydedildi.
+
+CSV dosyası tekrar pandas ile okunarak pipeline çıktısıyla karşılaştırıldı.
+
+`np.allclose()` ile yapılan kontrolde kaydedilmiş değerlerin orijinal
+forecast çıktısıyla aynı olduğu doğrulandı.
+
+
+#### 10. Streamlit Dashboard'un Başlatılması
+
+Final forecasting pipeline hazır hale geldikten sonra kullanıcı arayüzü
+aşamasına geçildi.
+
+Proje ana klasöründe:
+
+`app.py`
+
+dosyası oluşturuldu.
+
+Streamlit uygulaması:
+
+`streamlit run app.py`
+
+komutuyla yerel olarak çalıştırıldı.
+
+İlk çalıştırmada Streamlit local server'ın sorunsuz şekilde açıldığı
+doğrulandı.
+
+
+#### 11. Dashboard'un Final Forecasting Pipeline'a Bağlanması
+
+Dashboard gerçek proje dosyalarına bağlandı.
+
+`app.py` içerisinde:
+
+- güncel processed CSV verisi okunuyor
+- model metadata dosyası yükleniyor
+- `models/` klasöründeki model artifact'ları kullanılıyor
+- `generate_final_forecast()` çağrılıyor
+
+Bu nedenle dashboard üzerinde trend seçildiğinde modeller yeniden
+eğitilmiyor.
+
+Kaydedilmiş final modeller doğrudan inference amacıyla kullanılıyor.
+
+
+#### 12. Dashboard Trend Seçimi ve Bilgi Kartları
+
+Streamlit `selectbox` kullanılarak kullanıcıya:
+
+- ChatGPT
+- Gemini
+- Claude
+
+seçenekleri sunuldu.
+
+Seçilen trende göre dashboard içeriği otomatik olarak güncellenmektedir.
+
+Üç temel bilgi kartı oluşturuldu:
+
+- Son Gözlenen Skor
+- 4 Hafta Sonrası Tahmin
+- Final Model
+
+4 hafta sonrası tahmin kartında ayrıca mevcut değer ile forecast horizon
+sonundaki değer arasındaki değişim gösterilmektedir.
+
+
+#### 13. Plotly ile İnteraktif Geçmiş ve Forecast Grafiği
+
+Plotly kullanılarak seçilen trendin:
+
+- gerçek geçmiş Google Trends verisi
+- gelecek 4 haftalık final forecast'u
+
+aynı grafik üzerinde gösterildi.
+
+Gerçek veri düz çizgiyle, gelecek forecast ise farklı çizgi biçimi ve
+marker'larla ayrıldı.
+
+Forecast çizgisinin başlangıcına son gerçek gözlem eklenerek geçmiş ve
+gelecek arasında görsel bağlantı sağlandı.
+
+Google Trends değerleri doğal olarak 0-100 arasında olduğu için grafik
+Y ekseni de bu aralıkta tutuldu.
+
+Plotly hover özelliği sayesinde tarih ve trend skorları interaktif olarak
+incelenebilmektedir.
+
+
+#### 14. Forecast Tablosunun Dashboard'a Eklenmesi
+
+4 haftalık final forecast değerleri grafik dışında ayrıca tablo olarak
+gösterildi.
+
+Böylece kullanıcı tahminleri:
+
+- grafik üzerinde görsel olarak
+- tablo üzerinde sayısal olarak
+
+inceleyebilmektedir.
+
+
+#### 15. Anomaly Detection Kodunun `monitoring.py` İçerisine Taşınması
+
+Day 10'da notebook içerisinde geliştirilen anomaly detection yaklaşımı
+modüler hale getirildi.
+
+Yeni dosya:
+
+`src/monitoring.py`
+
+oluşturuldu.
+
+`detect_anomalies()` fonksiyonu bu dosyaya taşındı.
+
+Final monitoring parametreleri:
+
+- `window = 12`
+- `threshold = 3.5`
+- `min_absolute_change = 5`
+
+olarak korundu.
+
+Rolling referans hesaplamasında `shift(1)` kullanılarak mevcut gözlemin
+kendi geçmiş referans ortalamasına dahil edilmemesi sağlandı.
+
+
+#### 16. Güncel Anomaly Monitoring'in Dashboard'a Eklenmesi
+
+Dashboard üzerinde seçilen trend için güncel anomaly durumu hesaplanmaya
+başlandı.
+
+Kullanıcıya:
+
+- son gözlemin anomaly olup olmadığı
+- anomaly score
+
+gösterildi.
+
+2026-08-09 itibarıyla:
+
+- ChatGPT → Anomaly Score ≈ `0.47`
+- Gemini → Anomaly Score ≈ `-0.54`
+- Claude → Anomaly Score ≈ `-1.26`
+
+sonuçları elde edildi.
+
+Üç trend için de son gözlemde güçlü anomaly bulunmadı.
+
+
+#### 17. Forecast Tabanlı Early-Warning Mekanizmasının Oluşturulması
+
+Anomaly detection'dan ayrı olarak geleceğe yönelik bir early-warning
+mekanizması geliştirildi.
+
+`src/monitoring.py` içerisine:
+
+`detect_rising_trend_signal()`
+
+fonksiyonu eklendi.
+
+Bu fonksiyon:
+
+- mevcut değer ile forecast horizon sonundaki değer arasındaki toplam değişimi
+- forecast içerisindeki pozitif haftalık değişimlerin oranını
+
+hesaplamaktadır.
+
+Başlangıç eşikleri:
+
+- `min_total_increase = 5`
+- `min_positive_ratio = 0.75`
+
+olarak belirlendi.
+
+Yükselen Trend Sinyali oluşması için:
+
+- toplam artışın en az 5 Google Trends puanı olması
+- haftalık değişimlerin en az %75'inin pozitif olması
+
+şartı kullanıldı.
+
+Bu eşiklerin optimize edilmiş nihai istatistiksel parametreler olmadığı,
+yorumlanabilir başlangıç kuralları olduğu not edildi.
+
+
+#### 18. Anomaly Detection ve Early-Warning Ayrımının Netleştirilmesi
+
+İki monitoring kavramının farklı amaçlara hizmet ettiği netleştirildi.
+
+Anomaly Detection:
+
+"Mevcut veya geçmiş gözlem yakın geçmiş davranışına göre sıra dışı mı?"
+
+sorusuna cevap vermektedir.
+
+Early-Warning:
+
+"Final forecasting modeli gelecekte belirgin ve devamlı bir yükseliş
+öngörüyor mu?"
+
+sorusuna cevap vermektedir.
+
+Böylece geçmiş/mevcut monitoring ile gelecek tahmin sinyali birbirinden
+ayrıldı.
+
+
+#### 19. Güncel Early-Warning Sonuçları
+
+Mevcut final forecast'larda üç trend için de güçlü yükselen trend sinyali
+oluşmadı.
+
+ChatGPT:
+
+yaklaşık `70 → 72`
+
+şeklinde yukarı yönlü tahmin edilmesine rağmen toplam artış yaklaşık 2 puan
+olduğu için 5 puanlık alarm eşiğinin altında kaldı.
+
+Gemini:
+
+`40 → 40`
+
+Claude:
+
+`15 → 15`
+
+şeklinde sabit Naive forecast üretti.
+
+Bu nedenle üç trend için de güncel güçlü yükselen trend alarmı oluşmadı.
+
+
+#### 20. Geçmiş Anomaly Noktalarının İnteraktif Grafiğe Eklenmesi
+
+Anomaly detection sonucunda geçmişte `Is_Anomaly=True` olan noktalar Plotly
+grafiğine ayrıca eklendi.
+
+Anomaly noktaları ayrı marker'larla gösterildi.
+
+Kullanıcı bu noktaların üzerine geldiğinde:
+
+- tarih
+- gerçek trend skoru
+- anomaly score
+
+bilgilerini görebilmektedir.
+
+Böylece dashboard yalnızca mevcut anomaly durumunu göstermekle kalmayıp
+geçmişte tespit edilen sıra dışı hareketleri de görselleştirmeye başladı.
+
+
+#### 21. Streamlit Import Probleminin Çözülmesi
+
+Dashboard geliştirilirken:
+
+`ImportError: cannot import name 'detect_rising_trend_signal' from 'src.monitoring'`
+
+hatası alındı.
+
+`app.py` içerisinden import edilmeye çalışılan fonksiyonun
+`monitoring.py` içerisinde doğru şekilde tanımlanıp kaydedildiği kontrol edildi.
+
+Fonksiyon doğru isimle kaydedildikten ve Streamlit yeniden çalıştırıldıktan
+sonra import problemi çözüldü.
+
+
+#### 22. Gün Sonu Proje Yapısı
+
+Day 11 sonunda özellikle aşağıdaki proje bileşenleri oluşturulmuş veya
+güncellenmiş oldu:
+
+trend-forecast-project/
+│
+├── app.py
+│
+├── data/
+│   └── processed/
+│       └── google_trends_ai_3y_updated_2026-08-09.csv
+│
+├── models/
+│   ├── chatgpt_prophet_as_of_2026-08-09.json
+│   ├── chatgpt_xgb_as_of_2026-08-09.json
+│   └── model_metadata_as_of_2026-08-09.json
+│
+├── reports/
+│   └── final_forecast_as_of_2026-08-09.csv
+│
+├── src/
+│   ├── forecasting.py
+│   ├── monitoring.py
+│   └── pipeline.py
+│
+└── notebooks/
+    └── 11_final_pipeline_dashboard.ipynb
+
+### Bugün Öğrenilen Kavramlar
+
+Bugün Öğrenilen Kavramlar
+Model training ve inference farkı
+Final model training
+Model persistence
+Model artifact
+Serialization ve deserialization
+JSON veri formatı
+Metadata ve üst veri kavramı
+Model save/load doğrulaması
+Reproducibility
+Inference pipeline
+Kaydedilmiş modelden tahmin üretme
+Streamlit uygulama yapısı
+st.set_page_config()
+st.selectbox()
+st.metric()
+st.columns()
+st.error() ve st.stop()
+Plotly Figure
+Plotly Scatter
+Plotly trace mantığı
+hovertemplate
+customdata
+Dashboard ile forecasting backend'inin ayrılması
+Anomaly monitoring
+Forecast tabanlı early-warning
+Anomaly detection ile early-warning arasındaki fark
+Dashboard üzerinde model sonuçlarının interaktif sunulması
+
+### Sonraki Adımlar
+
+- Forecast uncertainty / confidence interval yaklaşımını final model yapısına uygun şekilde geliştirmek
+- Dashboard arayüzünü ve kullanıcı deneyimini iyileştirmek
+- Dashboard üzerinde hata yönetimi ve edge-case kontrollerini geliştirmek
+- `pipeline.py` ve `monitoring.py` fonksiyonlarını uçtan uca test etmek
+- Yeni veri geldiğinde modelin yeniden eğitilmesi ve model artifact'larının güncellenmesi sürecini netleştirmek
+- `requirements.txt` dosyasını güncel kullanılan kütüphanelerle güncellemek
+- README dosyasına final model yapısı, pipeline, model artifact'ları ve Streamlit kullanımını eklemek
+- Projeyi temiz bir ortamda baştan çalıştırarak kurulum ve çalıştırma adımlarını doğrulamak
+- Dashboard ve forecasting sonuçlarından final rapor için gerekli görselleri biriktirmek
+- Final staj raporunu hazırlamak
+- Final proje sunumunu ve dashboard demo akışını hazırlamak
