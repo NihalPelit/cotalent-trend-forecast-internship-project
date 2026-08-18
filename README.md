@@ -264,6 +264,15 @@ trend-forecast-project/
 - Güncel anomaly monitoring ve geçmiş anomaly noktaları dashboard'a entegre edildi.
 - Forecast tabanlı `detect_rising_trend_signal()` fonksiyonu geliştirilerek yükselen trend early-warning mekanizması eklendi.
 
+### 12. Gün
+
+Final forecast'lara cross-validation residual'larına dayalı merkezi %80
+ampirik prediction interval eklendi. ChatGPT Ensemble, Gemini Naive ve Claude
+Naive modelleri için 48'er out-of-sample residual kullanılarak Q10-Q90
+kalibrasyonu yapıldı. Coverage ve yapısal validation kontrolleri tamamlandı.
+Prediction interval metadata ve forecast çıktıları kaydedildi; Streamlit
+dashboard'a gölgeli belirsizlik bandı ve alt/üst sınır tablosu eklendi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -320,4 +329,5 @@ Uygulama varsayılan olarak yerel Streamlit sunucusunda açılır.
 - Forecast tabanlı yükselen trend early-warning mekanizması bulunmaktadır.
 - Streamlit + Plotly tabanlı interaktif dashboard yerelde çalışmaktadır.
 - Event-aware XGBoost yaklaşımı deneysel olarak test edildi ancak mevcut binary event feature yapısı final forecasting pipeline'ına dahil edilmedi.
-- Sonraki aşamada dashboard iyileştirmeleri, uncertainty yaklaşımı, uçtan uca testler ve proje dokümantasyonu üzerinde çalışılacaktır.
+- Uygun şekilde prediction interval/uncertainty’nin dashboard’a entegre edildi.
+-Sonraki aşamada uçtan uca testler, proje dokümantasyonu, final raporu ve sunum/demo hazırlıkları tamamlanacaktır.

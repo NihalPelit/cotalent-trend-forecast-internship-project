@@ -94,6 +94,26 @@ models_dir = project_root / "models"
 # metadata JSON dosyasının yolu.
 metadata_path = models_dir / "model_metadata_as_of_2026-08-09.json"
 
+# ---------------------------------------------------------
+# Prediction interval metadata dosyası
+# ---------------------------------------------------------
+
+# Bu dosya cross-validation residual analizinden elde edilen:
+#
+# - interval seviyesi
+# - Q10
+# - Q90
+# - residual sayısı
+# - kullanılan final model
+#
+# gibi kalibrasyon bilgilerini içerir.
+#
+# Dashboard bu dosyayı kullanarak CV'yi yeniden
+# çalıştırmadan prediction interval üretebilir.
+INTERVAL_METADATA_PATH = (
+    project_root / "models" / "prediction_interval_metadata_as_of_2026-08-09.json"
+)
+
 
 # --------------------------------------------------
 # Dashboard başlığı
@@ -142,6 +162,17 @@ try:
     # Model seçimleri ve parametre bilgileri
     # metadata JSON dosyasından geliyor.
     metadata = load_model_metadata(metadata_path)
+
+    # -----------------------------------------------------
+    # Prediction interval metadata
+    # -----------------------------------------------------
+
+    # load_model_metadata() fonksiyonumuz teknik olarak
+    # verilen JSON dosyasını Python dictionary olarak okur.
+    #
+    # Bu nedenle aynı JSON loader'ı interval metadata
+    # dosyasını okumak için de kullanabiliriz.
+    interval_metadata = load_model_metadata(INTERVAL_METADATA_PATH)
 
     # --------------------------------------------------
     # Final forecast
@@ -275,6 +306,73 @@ latest_is_anomaly = bool(latest_anomaly["Is_Anomaly"])
 # Gemini
 # Claude
 forecast_series = final_forecast[selected_trend]
+
+# ---------------------------------------------------------
+# Seçilen trendin prediction interval kalibrasyonu
+# ---------------------------------------------------------
+
+# interval_metadata içerisindeki trend isimleri:
+#
+# chatgpt
+# gemini
+# claude
+#
+# şeklinde küçük harfle saklanıyor.
+#
+# selected_column zaten tam olarak bu isimleri içerdiği için
+# metadata sözlüğüne doğrudan anahtar olarak verebiliriz.
+selected_interval_config = interval_metadata["trends"][selected_column]
+
+
+# ---------------------------------------------------------
+# Q10 ve Q90 değerlerini alıyoruz
+# ---------------------------------------------------------
+
+# Q10:
+# Cross-validation residual dağılımının alt %10 sınırı.
+#
+# Q90:
+# Cross-validation residual dağılımının üst %10'a
+# geçmeden önceki sınırı.
+selected_q10 = float(selected_interval_config["q10"])
+
+selected_q90 = float(selected_interval_config["q90"])
+
+# ---------------------------------------------------------
+# Seçilen trendin %80 ampirik prediction interval'ı
+# ---------------------------------------------------------
+
+# Residual tanımımız:
+#
+# residual = actual - prediction
+#
+# Bu nedenle:
+#
+# Lower = Forecast + Q10
+# Upper = Forecast + Q90
+#
+# kullanıyoruz.
+forecast_lower = forecast_series + selected_q10
+
+forecast_upper = forecast_series + selected_q90
+
+
+# ---------------------------------------------------------
+# Google Trends 0-100 sınırı
+# ---------------------------------------------------------
+
+# Google Trends skorlarının doğal domain'i 0-100 olduğu
+# için prediction interval sınırlarının da bu aralığın
+# dışına çıkmasına izin vermiyoruz.
+forecast_lower = forecast_lower.clip(
+    lower=0,
+    upper=100,
+)
+
+forecast_upper = forecast_upper.clip(
+    lower=0,
+    upper=100,
+)
 
 # --------------------------------------------------
 # Gelecek trend sinyali
@@ -509,6 +607,54 @@ if not historical_anomalies.empty:
         )
     )
 
+# --------------------------------------------------
+# %80 ampirik prediction interval bandı
+# --------------------------------------------------
+
+# Önce alt sınırı görünmez bir çizgi olarak ekliyoruz.
+# Bu çizgi, birazdan üst sınırla arasındaki alanın
+# doldurulması için referans olacak.
+figure.add_trace(
+    go.Scatter(
+        x=forecast_lower.index,
+        y=forecast_lower,
+        mode="lines",
+        line={"width": 0},
+        name="Alt Sınır",
+        hoverinfo="skip",
+        showlegend=False,
+    )
+)
+
+
+# Üst sınırı ekliyoruz.
+#
+# fill="tonexty":
+# Bu trace ile hemen önceki trace arasındaki
+# alanı doldurur.
+#
+# Önce Lower'ı eklediğimiz için Lower-Upper
+# arasındaki bölge prediction interval olur.
+figure.add_trace(
+    go.Scatter(
+        x=forecast_upper.index,
+        y=forecast_upper,
+        mode="lines",
+        line={"width": 0},
+        fill="tonexty",
+        name="%80 Ampirik Prediction Interval",
+        # Alt sınırı hover içerisinde gösterebilmek
+        # için customdata'ya bağlıyoruz.
+        customdata=forecast_lower.to_numpy(),
+        hovertemplate=(
+            "Tarih: %{x|%Y-%m-%d}<br>"
+            "Alt Sınır: %{customdata:.2f}<br>"
+            "Üst Sınır: %{y:.2f}"
+            "<extra></extra>"
+        ),
+    )
+)
+
 
 # --------------------------------------------------
 # Forecast çizgisini gerçek veriye bağlama
@@ -584,23 +730,32 @@ st.plotly_chart(
 
 
 # --------------------------------------------------
-# Forecast tablosu
+# Forecast + prediction interval tablosu
 # --------------------------------------------------
 
-st.subheader("4 Haftalık Tahmin")
+st.subheader("4 Haftalık Tahmin ve Prediction Interval")
+
+forecast_table = pd.DataFrame(
+    {
+        "Tahmin": forecast_series,
+        "Alt Sınır (%80)": forecast_lower,
+        "Üst Sınır (%80)": forecast_upper,
+    }
+)
 
 
-# Forecast Series'i daha okunabilir
-# bir DataFrame haline getiriyoruz.
-forecast_table = forecast_series.rename("Tahmin").to_frame()
-
-
-# Index ismini kullanıcıya uygun hale getiriyoruz.
+# Tarih index'inin kullanıcıya gösterilecek adı.
 forecast_table.index.name = "Tarih"
 
 
-# Sayısal değerleri iki ondalık basamakla gösteriyoruz.
+# Bütün sayısal kolonları iki ondalıkla gösteriyoruz.
 st.dataframe(
-    forecast_table.style.format({"Tahmin": "{:.2f}"}),
+    forecast_table.style.format(
+        {
+            "Tahmin": "{:.2f}",
+            "Alt Sınır (%80)": "{:.2f}",
+            "Üst Sınır (%80)": "{:.2f}",
+        }
+    ),
     use_container_width=True,
 )

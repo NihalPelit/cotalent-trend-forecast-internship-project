@@ -3045,3 +3045,83 @@ Dashboard üzerinde model sonuçlarının interaktif sunulması
 - Dashboard ve forecasting sonuçlarından final rapor için gerekli görselleri biriktirmek
 - Final staj raporunu hazırlamak
 - Final proje sunumunu ve dashboard demo akışını hazırlamak
+
+## Day 12 — 18.08.2026
+
+### Hedefler
+
+- Final forecast'lar için belirsizlik bilgisinin oluşturulması
+- Cross-validation residual'larından ampirik prediction interval elde edilmesi
+- Prediction interval yaklaşımının doğrulanması
+- Belirsizlik bilgisinin Streamlit dashboard'a entegre edilmesi
+
+### Yapılan Çalışmalar
+
+1. Final modeller için out-of-sample residual'lar oluşturuldu.
+   - Gemini ve Claude için Naive CV residual'ları kullanıldı.
+   - ChatGPT için final Prophet + XGBoost Ensemble modelinin CV residual'ları
+     ayrıca üretildi.
+   - Her trend için 12 fold × 4 hafta = 48 residual elde edildi.
+
+2. Residual dağılımları analiz edildi.
+   - Mean, median, standart sapma ve uç değerler incelendi.
+   - Q10-Q90 merkezi %80 ampirik prediction interval yaklaşımı seçildi.
+   - Residual dağılımlarının simetrik olmadığı görüldüğü için simetrik
+     `forecast ± hata` yaklaşımı kullanılmadı.
+
+3. Forecast horizon etkisi incelendi.
+   - Horizon 1-4 residual'ları ayrı ayrı değerlendirildi.
+   - Horizon ilerledikçe belirsizliğin artabileceğine dair sinyal gözlendi.
+   - Ancak horizon başına yalnızca 12 residual bulunduğundan final sistemde
+     daha kararlı olan pooled 48-residual yaklaşımı tercih edildi.
+
+4. Final interval kalibrasyonları elde edildi.
+   - ChatGPT: Q10 ≈ -7.609, Q90 ≈ 5.171
+   - Gemini: Q10 ≈ -5.300, Q90 ≈ 5.000
+   - Claude: Q10 ≈ -1.000, Q90 ≈ 3.300
+
+5. Ampirik coverage kontrolü yapıldı.
+   - ChatGPT: %79.17
+   - Gemini: %85.42
+   - Claude: %81.25
+   - Sonuçların hedeflenen %80 seviyesine yakın olduğu görüldü.
+
+6. Final forecast + prediction interval sonuçları kaydedildi.
+   - `reports/final_forecast_with_intervals_as_of_2026-08-09.csv`
+
+7. Prediction interval metadata oluşturuldu.
+   - `models/prediction_interval_metadata_as_of_2026-08-09.json`
+   - Interval seviyesi, Q10-Q90, CV yapısı, residual sayıları ve final model
+     bilgileri saklandı.
+
+8. Streamlit dashboard güncellendi.
+   - Prediction interval metadata uygulamaya bağlandı.
+   - Seçilen trend için Lower/Upper sınırları otomatik hesaplandı.
+   - Plotly forecast grafiğine gölgeli %80 ampirik prediction interval eklendi.
+   - Forecast tablosu Tahmin / Alt Sınır / Üst Sınır şeklinde güncellendi.
+   - ChatGPT, Gemini ve Claude için dashboard çıktıları doğrulandı.
+
+9. Final yapısal validation kontrolleri gerçekleştirildi.
+   - `Lower <= Forecast <= Upper`
+   - NaN bulunmaması
+   - Bütün değerlerin 0-100 arasında olması
+   - Tüm kontroller başarılı (`True`) sonuçlandı.
+
+### Bugün Öğrenilen Kavramlar
+
+- Residual dağılımından ampirik prediction interval oluşturma
+- Quantile ve merkezi prediction interval
+- Q10-Q90 yaklaşımı
+- Prediction interval ile MAE tabanlı hata bandı arasındaki fark
+- Pooled residual ve horizon-specific residual yaklaşımı
+- Ampirik coverage
+- Prediction interval kalibrasyonu ile bağımsız validation arasındaki fark
+- Plotly `fill="tonexty"` ile belirsizlik bandı oluşturma
+- Calibration metadata'nın inference sisteminden ayrılması
+
+### Sonraki Adımlar
+
+- Proje dokümantasyonunun son halinin hazırlanması
+- README ve proje kullanım açıklamalarının güncellenmesi
+- Final staj raporu için proje sürecinin ve sonuçlarının düzenlenmesi
+- Gerekirse sunum/demo materyallerinin hazırlanması

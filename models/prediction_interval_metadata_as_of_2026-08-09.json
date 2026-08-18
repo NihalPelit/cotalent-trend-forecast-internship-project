@@ -1,0 +1,43 @@
+{
+    "data_cutoff_date": "2026-08-09",
+    "interval_level": 0.8,
+    "method": "empirical_cv_residual_quantiles",
+    "residual_definition": "actual_minus_prediction",
+    "quantiles": {
+        "lower": 0.1,
+        "upper": 0.9
+    },
+    "cross_validation": {
+        "n_splits": 12,
+        "test_size_weeks": 4,
+        "pooled_residuals": true,
+        "horizon_specific_intervals_used": false
+    },
+    "trends": {
+        "chatgpt": {
+            "final_model": "prophet_xgboost_ensemble",
+            "ensemble_weights": {
+                "prophet": 0.5,
+                "xgboost": 0.5
+            },
+            "residual_count": 48,
+            "q10": -7.6092931545733276,
+            "q90": 5.17103307416967,
+            "width_80": 12.780326228742997
+        },
+        "gemini": {
+            "final_model": "naive",
+            "residual_count": 48,
+            "q10": -5.3,
+            "q90": 5.0,
+            "width_80": 10.3
+        },
+        "claude": {
+            "final_model": "naive",
+            "residual_count": 48,
+            "q10": -1.0,
+            "q90": 3.3000000000000043,
+            "width_80": 4.300000000000004
+        }
+    }
+}
