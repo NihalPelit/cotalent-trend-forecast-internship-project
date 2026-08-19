@@ -273,6 +273,12 @@ kalibrasyonu yapıldı. Coverage ve yapısal validation kontrolleri tamamlandı.
 Prediction interval metadata ve forecast çıktıları kaydedildi; Streamlit
 dashboard'a gölgeli belirsizlik bandı ve alt/üst sınır tablosu eklendi.
 
+### 13. Gün
+
+Önceki günlerde geliştirilen veri işleme, forecasting, model evaluation,
+monitoring, pipeline, dashboard ve prediction interval çalışmalarının
+kapsamlı teknik tekrarı yapılarak proje bilgisi pekiştirildi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
