@@ -3143,3 +3143,56 @@ değerlendirildi.
 
 Bugünün amacı proje sunumu ve final raporlama öncesinde geliştirilen
 sistemin teknik mantığını bütünsel olarak pekiştirmekti.
+
+## Day 14 — 20.08.2026
+
+### Hedefler
+
+- Final sistemi uçtan uca kontrol etmek.
+- Dashboard üzerindeki forecast gösterimini iyileştirmek.
+- Gerçekleşen tahminler için forward validation yapısı eklemek.
+- `src/` fonksiyonlarının docstring'lerini düzenlemek.
+- README'yi final proje durumuna göre gözden geçirmek.
+
+### Yapılan Çalışmalar
+
+1. `14_end_to_end_validation.ipynb` oluşturuldu.
+   - Gerekli veri, model ve metadata dosyalarının mevcut olduğu kontrol edildi.
+   - Veri cutoff tarihi ile model metadata cutoff tarihinin aynı olduğu doğrulandı.
+   - Kaydedilmiş Prophet ve XGBoost modellerinin tekrar yüklenebildiği kontrol edildi.
+   - `generate_final_forecast()` ile üretilen tahminlerin kaydedilmiş final forecast ile aynı olduğu doğrulandı.
+   - Prediction interval ve monitoring kontrolleri gerçekleştirildi.
+
+2. Streamlit dashboard grafiği düzenlendi.
+   - Gerçek veri ve forecast trace'leri daha net ayrıldı.
+   - Forecast hover bilgisinde tahmin, alt sınır ve üst sınır gösterilecek şekilde düzenleme yapıldı.
+   - Plotly `hovermode="closest"` kullanıldı.
+
+3. Dashboard'a `Gerçekleşen Tahmin Performansı` bölümü eklendi.
+   - Gelecekte açıklanacak gerçek değerlerin mevcut forecast ile karşılaştırılabileceği tablo hazırlandı.
+   - Mutlak hata ve Forward Validation MAE hesaplanabilecek yapı oluşturuldu.
+
+4. Projenin kod kalitesi kontrol edildi.
+   - `src/` içerisindeki fonksiyon docstring'leri NumPy-style formatta standartlaştırıldı.
+   - Fonksiyonların çalışma mantığı değiştirilmedi.
+   - `app.py` incelendi ve kullanıcı tanımlı fonksiyon bulunmadığı için ek fonksiyon docstring'i gerekmediği görüldü.
+
+5. README final proje durumuna göre kontrol edildi.
+   - Güncelliğini kaybeden ifadeler ve eksik proje dosyaları belirlendi.
+   - Day 14 özeti ve güncel kurulum/proje durumu için gerekli düzenlemeler planlandı.
+
+### Bugün Öğrenilen Kavramlar
+
+- End-to-end validation
+- Reproducibility
+- Model persistence kontrolü
+- Forward validation
+- Plotly hover düzenleme
+- NumPy-style docstring
+- README ile proje reproducibility'si
+
+### Sonraki Adımlar
+
+- README ve `requirements.txt` son kontrollerini tamamlamak.
+- GitHub repository'sini güncellemek.
+- Final rapor ve sunum hazırlıklarına başlamak.

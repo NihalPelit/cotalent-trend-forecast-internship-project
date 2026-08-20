@@ -1,3 +1,12 @@
+"""
+Streamlit tabanlı Trend Forecast Dashboard.
+
+Bu modül; geçmiş Google Trends verilerini, kaydedilmiş forecasting
+modellerinden üretilen 4 haftalık tahminleri, ampirik prediction
+interval'ları, anomaly monitoring sonuçlarını ve early-warning
+sinyallerini kullanıcıya interaktif olarak sunar.
+"""
+
 # --------------------------------------------------
 # Trend Forecast Dashboard
 # --------------------------------------------------
@@ -645,54 +654,100 @@ figure.add_trace(
         name="%80 Ampirik Prediction Interval",
         # Alt sınırı hover içerisinde gösterebilmek
         # için customdata'ya bağlıyoruz.
-        customdata=forecast_lower.to_numpy(),
-        hovertemplate=(
-            "Tarih: %{x|%Y-%m-%d}<br>"
-            "Alt Sınır: %{customdata:.2f}<br>"
-            "Üst Sınır: %{y:.2f}"
-            "<extra></extra>"
-        ),
+        hoverinfo="skip",
     )
 )
 
 
 # --------------------------------------------------
-# Forecast çizgisini gerçek veriye bağlama
+# Son gerçek nokta ile ilk forecast noktasını bağlama
 # --------------------------------------------------
-
-# Eğer forecast sadece gelecekteki tarihlerden
-# başlarsa gerçek veri ile arasında küçük bir
-# görsel boşluk oluşabilir.
 #
-# Bu nedenle son gerçek gözlemi forecast serisinin
-# başına ekliyoruz.
-forecast_with_connection = pd.concat(
-    [
-        historical_series.tail(1),
-        forecast_series,
-    ]
-)
-
-
-# --------------------------------------------------
-# Forecast çizgisi
+# Bu çizgi sadece görsel bağlantı içindir.
+#
+# ÖNEMLİ:
+# Son gerçek değer forecast serisine eklenmiyor.
+# Böylece 9 Ağustos değeri yanlışlıkla
+# "Tahmin" olarak görünmeyecek.
+#
+# hoverinfo="skip":
+# Mouse bu çizginin üzerine geldiğinde
+# herhangi bir bilgi kutusu gösterilmez.
 # --------------------------------------------------
 
 figure.add_trace(
     go.Scatter(
-        x=forecast_with_connection.index,
-        y=forecast_with_connection.values,
-        mode="lines+markers",
-        name="Final Forecast",
-        # dash="dash":
-        # Forecast bölümünü kesikli çizgi yaparak
-        # gerçek veriden görsel olarak ayırıyoruz.
+        x=[
+            historical_series.index[-1],
+            forecast_series.index[0],
+        ],
+        y=[
+            historical_series.iloc[-1],
+            forecast_series.iloc[0],
+        ],
+        mode="lines",
+        showlegend=False,
+        hoverinfo="skip",
         line={"dash": "dash"},
-        hovertemplate=("Tarih: %{x|%Y-%m-%d}<br>Tahmin: %{y:.1f}<extra></extra>"),
     )
 )
 
 
+# --------------------------------------------------
+# Final forecast çizgisi
+# --------------------------------------------------
+#
+# Burada artık SADECE gerçek gelecek tahminleri var:
+#
+# 2026-08-16
+# 2026-08-23
+# 2026-08-30
+# 2026-09-06
+#
+# 9 Ağustos bu serinin içerisinde değildir.
+# --------------------------------------------------
+
+figure.add_trace(
+    go.Scatter(
+        x=forecast_series.index,
+        y=forecast_series.values,
+        mode="lines+markers",
+        name="Final Forecast",
+        line={"dash": "dash"},
+        # customdata:
+        # Her forecast noktasına o tarihin
+        # alt ve üst prediction interval sınırlarını
+        # bağlıyoruz.
+        #
+        # Örneğin:
+        #
+        # 16 Ağustos:
+        # forecast = 70.25
+        # lower    = 62.64
+        # upper    = 75.42
+        customdata=list(
+            zip(
+                forecast_lower,
+                forecast_upper,
+            )
+        ),
+        # Böylece gelecek bir tarihin üzerine geldiğimizde
+        # yalnızca:
+        #
+        # Tahmin
+        # Alt Sınır
+        # Üst Sınır
+        #
+        # gösterilecek.
+        hovertemplate=(
+            "Tarih: %{x|%Y-%m-%d}<br>"
+            "Tahmin: %{y:.2f}<br>"
+            "Alt Sınır: %{customdata[0]:.2f}<br>"
+            "Üst Sınır: %{customdata[1]:.2f}"
+            "<extra></extra>"
+        ),
+    )
+)
 # --------------------------------------------------
 # Grafik görünüm ayarları
 # --------------------------------------------------
@@ -701,13 +756,18 @@ figure.update_layout(
     title=(f"{selected_trend} Google Trends Geçmiş Verisi ve 4 Haftalık Forecast"),
     xaxis_title="Tarih",
     yaxis_title="Google Trends Skoru",
-    # Mouse'u grafiğin üzerine getirince
-    # x eksenindeki serileri birlikte gösterir.
-    hovermode="x unified",
-    # Dashboard genişliğine uygun yükseklik.
+    # "closest":
+    # Mouse hangi veri noktasının üzerindeyse
+    # yalnızca o noktaya ait hover bilgisini gösterir.
+    #
+    # Daha önce kullandığımız "x unified" farklı
+    # trace'lerin bilgilerini aynı kutuda topladığı için
+    # gelecekteki forecast tarihlerinde bile
+    # son gerçek gözlem olan 9 Ağustos değerini
+    # göstermeye devam ediyordu.
+    hovermode="closest",
     height=550,
 )
-
 
 # Google Trends skorları doğal olarak
 # 0 ile 100 arasındadır.
@@ -759,3 +819,159 @@ st.dataframe(
     ),
     use_container_width=True,
 )
+
+# --------------------------------------------------
+# Gerçekleşen tahmin performansı
+# --------------------------------------------------
+#
+# Bu bölüm, geçmişte üretilmiş forecast değerlerini
+# daha sonra açıklanan gerçek Google Trends değerleriyle
+# karşılaştırmak için kullanılır.
+#
+# Henüz gerçekleşmemiş haftalarda "-" gösterilir.
+# --------------------------------------------------
+
+st.subheader("Gerçekleşen Tahmin Performansı")
+
+
+# --------------------------------------------------
+# Gerçekleşen değerler
+# --------------------------------------------------
+#
+# Şu anda 16 Ağustos haftası henüz tamamlanmadığı için
+# gerçek değerler elimizde yok.
+#
+# İleride değer açıklandığında örneğin:
+#
+# "ChatGPT": {
+#     pd.Timestamp("2026-08-16"): 68.0
+# }
+#
+# şeklinde ekleyeceğiz.
+# --------------------------------------------------
+
+forward_actual_values = {
+    "ChatGPT": {},
+    "Gemini": {},
+    "Claude": {},
+}
+
+
+# Kullanıcının seçtiği trendin
+# gerçekleşen değer dictionary'sini alıyoruz.
+selected_actual_values = forward_actual_values[selected_trend]
+
+
+# --------------------------------------------------
+# Forward validation tablosunun satırlarını oluşturma
+# --------------------------------------------------
+
+validation_rows = []
+
+# Gerçekleşmiş tahminlerin mutlak hatalarını
+# MAE hesaplamak için burada tutacağız.
+available_errors = []
+
+
+for forecast_date in forecast_series.index:
+    # O haftanın daha önce üretilmiş tahmini.
+    forecast_value = float(forecast_series.loc[forecast_date])
+
+    # Prediction interval alt sınırı.
+    lower_value = float(forecast_lower.loc[forecast_date])
+
+    # Prediction interval üst sınırı.
+    upper_value = float(forecast_upper.loc[forecast_date])
+
+    # .get():
+    # Dictionary içinde bu tarih varsa actual değeri getirir.
+    # Yoksa None döndürür.
+    actual_value = selected_actual_values.get(pd.Timestamp(forecast_date))
+
+    # --------------------------------------------------
+    # Henüz gerçekleşmemiş hafta
+    # --------------------------------------------------
+
+    if actual_value is None:
+        actual_display = "-"
+        error_display = "-"
+        interval_display = "-"
+
+    # --------------------------------------------------
+    # Gerçek değer açıklanmışsa
+    # --------------------------------------------------
+
+    else:
+        actual_value = float(actual_value)
+
+        # Mutlak hata:
+        #
+        # |Actual - Forecast|
+        absolute_error = abs(actual_value - forecast_value)
+
+        available_errors.append(absolute_error)
+
+        actual_display = f"{actual_value:.2f}"
+
+        error_display = f"{absolute_error:.2f}"
+
+        # Gerçek değer prediction interval içinde mi?
+        if lower_value <= actual_value <= upper_value:
+            interval_display = "✅ Evet"
+
+        else:
+            interval_display = "❌ Hayır"
+
+    # Tek bir tarih için tablo satırı oluşturuyoruz.
+    validation_rows.append(
+        {
+            "Tarih": forecast_date.strftime("%Y-%m-%d"),
+            "Tahmin": f"{forecast_value:.2f}",
+            "Gerçekleşen": actual_display,
+            "Mutlak Hata (puan)": error_display,
+            "Aralık İçinde?": interval_display,
+        }
+    )
+
+
+# --------------------------------------------------
+# Listeyi DataFrame'e dönüştürme
+# --------------------------------------------------
+
+validation_table = pd.DataFrame(validation_rows)
+
+
+# --------------------------------------------------
+# Dashboard'da gösterme
+# --------------------------------------------------
+
+st.dataframe(
+    validation_table,
+    use_container_width=True,
+    hide_index=True,
+)
+
+
+# --------------------------------------------------
+# Forward Validation MAE
+# --------------------------------------------------
+#
+# Sadece gerçek değeri açıklanmış haftalar kullanılır.
+#
+# Henüz açıklanmamış "-" satırlar
+# MAE hesabına dahil edilmez.
+# --------------------------------------------------
+
+if available_errors:
+    forward_validation_mae = sum(available_errors) / len(available_errors)
+
+    st.metric(
+        label="Forward Validation MAE",
+        value=f"{forward_validation_mae:.2f} puan",
+    )
+
+else:
+    st.caption(
+        "Henüz 9 Ağustos cutoff tarihinden sonra "
+        "tamamlanmış bir forecast haftası bulunmuyor."
+    )

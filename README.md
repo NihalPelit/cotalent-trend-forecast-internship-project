@@ -2,11 +2,15 @@
 
 ## Proje Hakkında
 
-Bu proje, coTalent AI Takımı staj programı kapsamında geliştirilen **Veri Tabanlı Trend Tahminleme ve Öngörü Motoru** çalışmasıdır.
+## Proje Hakkında
 
-Projenin amacı; zaman serisi verilerini kullanarak teknoloji ve kavramların geçmiş trendlerini analiz etmek ve ilerleyen aşamalarda gelecekteki ilgi seviyelerini tahmin edebilen uçtan uca bir veri bilimi pipeline'ı geliştirmektir.
+Bu proje, coTalent AI Takımı staj programı kapsamında geliştirilen
+**Veri Tabanlı Trend Tahminleme ve Öngörü Motoru** çalışmasıdır.
 
-## Kullanılan Teknolojiler
+Projenin amacı; zaman serisi verilerini kullanarak teknoloji ve kavramların
+geçmiş trendlerini analiz etmek, gelecek yaklaşık 30 günlük ilgi seviyelerini
+tahmin etmek ve anomaly monitoring ile early-warning mekanizmalarını içeren
+uçtan uca bir veri bilimi pipeline'ı geliştirmektir.
 
 ## Kullanılan Teknolojiler
 
@@ -23,7 +27,7 @@ Projenin amacı; zaman serisi verilerini kullanarak teknoloji ve kavramların ge
 - Streamlit
 - Git / GitHub
 
-Projenin ilerleyen aşamalarında LightGBM, Plotly ve Streamlit kullanılması planlanmaktadır.
+
 
 ## Proje Yapısı
 
@@ -40,18 +44,24 @@ trend-forecast-project/
 │   ├── chatgpt_prophet_as_of_2026-08-09.json
 │   ├── chatgpt_xgb_as_of_2026-08-09.json
 │   └── model_metadata_as_of_2026-08-09.json
+|   |__ prediction_interval_metadata_as_of_2026-08-09.json
 │
 ├── notebooks/
 │   └── ...
 │
 ├── reports/
 │   └── final_forecast_as_of_2026-08-09.csv
+|   └── final_forecast_with_intervals_as_of_2026-08-09.csv
+|
+|
 │
 ├── src/
 │   ├── fetch_data.py
 │   ├── forecasting.py
 │   ├── monitoring.py
 │   └── pipeline.py
+|   └── time_series.py
+|   └── pipeline.py
 │
 ├── .gitignore
 ├── daily_notes.md
@@ -61,7 +71,7 @@ trend-forecast-project/
 
 ## Gün Özetleri
 
-### İlk Gün Çalışmaları
+### 1.Gün
 
 İlk gün kapsamında:
 
@@ -279,6 +289,19 @@ dashboard'a gölgeli belirsizlik bandı ve alt/üst sınır tablosu eklendi.
 monitoring, pipeline, dashboard ve prediction interval çalışmalarının
 kapsamlı teknik tekrarı yapılarak proje bilgisi pekiştirildi.
 
+### 14. Gün
+
+- Kaydedilmiş model artifact'ları, veri/metadata cutoff uyumu ve final
+  inference pipeline uçtan uca doğrulandı.
+- Kaydedilmiş modellerden üretilen tahminlerin daha önce kaydedilmiş final
+  forecast çıktılarıyla aynı olduğu kontrol edildi.
+- Prediction interval, Google Trends 0–100 domain sınırı ve monitoring
+  bileşenleri sistem seviyesinde doğrulandı.
+- Dashboard forecast hover davranışı iyileştirildi ve gerçek veri ile
+  forecast çizgileri görsel olarak ayrıştırıldı.
+- Gelecekte gerçekleşen değerlerin mevcut tahminlerle karşılaştırılabilmesi
+  için forward validation tablosu eklendi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -313,6 +336,12 @@ Dashboard'u çalıştırmak için proje ana klasöründe:
 streamlit run app.py
 ```
 
+Projeyi klonlamak:
+
+```bash
+git clone https://github.com/NihalPelit/cotalent-trend-forecast-internship-project.git
+cd cotalent-trend-forecast-internship-project
+```
 komutu kullanılabilir.
 
 Uygulama varsayılan olarak yerel Streamlit sunucusunda açılır.
@@ -335,5 +364,6 @@ Uygulama varsayılan olarak yerel Streamlit sunucusunda açılır.
 - Forecast tabanlı yükselen trend early-warning mekanizması bulunmaktadır.
 - Streamlit + Plotly tabanlı interaktif dashboard yerelde çalışmaktadır.
 - Event-aware XGBoost yaklaşımı deneysel olarak test edildi ancak mevcut binary event feature yapısı final forecasting pipeline'ına dahil edilmedi.
-- Uygun şekilde prediction interval/uncertainty’nin dashboard’a entegre edildi.
--Sonraki aşamada uçtan uca testler, proje dokümantasyonu, final raporu ve sunum/demo hazırlıkları tamamlanacaktır.
+- - Cross-validation residual'larına dayalı %80 ampirik prediction interval dashboard'a entegre edildi.
+- Uçtan uca sistem validation kontrolleri başarıyla tamamlandı.
+- Sonraki aşamada final proje raporu, sunum ve demo hazırlıkları tamamlanacaktır.

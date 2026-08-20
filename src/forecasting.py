@@ -12,10 +12,27 @@ def clip_predictions(
     clip_range: tuple[float, float] | None = None,
 ):
     """
-    Tahminleri belirtilen alt ve üst sınırlar arasında tutar.
+    Tahmin değerlerini belirtilen alt ve üst sınırlar arasında tutar.
 
-    Örneğin Google Trends için:
-    clip_range=(0, 100)
+    Parameters
+    ----------
+    predictions : array-like
+        Sınırlandırılacak tahmin değerleri.
+
+    clip_range : tuple[float, float] | None, default=None
+        Tahminlerin tutulacağı alt ve üst sınır. `None` verilirse
+        tahmin değerlerine herhangi bir clipping işlemi uygulanmaz.
+
+    Returns
+    -------
+    array-like
+        Belirtilen aralığa göre sınırlandırılmış tahmin değerleri.
+        `clip_range=None` ise orijinal tahminler döndürülür.
+
+    Notes
+    -----
+    Google Trends verileri doğal olarak 0 ile 100 arasında olduğu için
+    bu projede gerektiğinde `clip_range=(0, 100)` kullanılmaktadır.
     """
 
     if clip_range is None:
@@ -32,7 +49,30 @@ def evaluate_naive_cv(
     series: pd.Series,
     splitter: TimeSeriesSplit,
 ) -> pd.DataFrame:
-    """Naive modeli time-series cross-validation ile değerlendirir."""
+    """
+    Naive modeli time-series cross-validation ile değerlendirir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Değerlendirilecek tarihsel zaman serisi.
+
+    splitter : TimeSeriesSplit
+        Zaman sırasını koruyarak train ve test fold'larını oluşturan
+        scikit-learn `TimeSeriesSplit` nesnesi.
+
+    Returns
+    -------
+    pd.DataFrame
+        Her cross-validation fold'u için fold numarası, MAE ve RMSE
+        değerlerini içeren sonuç tablosu.
+
+    Notes
+    -----
+    Naive tahminde her test döneminin tahmini, ilgili train dönemindeki
+    son gözlenen değerin test horizonunun tamamına tekrar edilmesiyle
+    oluşturulur.
+    """
 
     results = []
 
@@ -76,8 +116,26 @@ def forecast_naive(
     steps: int,
 ) -> pd.Series:
     """
-    Son gözlenen değeri gelecek dönemler için
-    tahmin olarak kullanır.
+    Son gözlenen değeri gelecek dönemler için tahmin olarak kullanır.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Gelecek tahmini üretilecek tarihsel zaman serisi.
+
+    steps : int
+        Gelecekte tahmin edilecek hafta sayısı.
+
+    Returns
+    -------
+    pd.Series
+        Gelecek haftalara ait Naive tahminleri. Serinin index'i
+        haftalık (`W-SUN`) gelecek tarihlerden oluşur.
+
+    Notes
+    -----
+    Naive yöntem, serideki son gerçek değeri tüm forecast horizonunda
+    sabit tahmin olarak kullanır.
     """
 
     last_value = series.iloc[-1]
@@ -103,7 +161,36 @@ def evaluate_arima_cv(
     order: tuple[int, int, int],
     clip_range: tuple[float, float] | None = None,
 ) -> pd.DataFrame:
-    """ARIMA modelini time-series cross-validation ile değerlendirir."""
+    """
+    ARIMA modelini time-series cross-validation ile değerlendirir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Değerlendirilecek tarihsel zaman serisi.
+
+    splitter : TimeSeriesSplit
+        Zaman sırasını koruyarak train ve test fold'larını oluşturan
+        scikit-learn `TimeSeriesSplit` nesnesi.
+
+    order : tuple[int, int, int]
+        ARIMA modelinin `(p, d, q)` parametreleri.
+
+    clip_range : tuple[float, float] | None, default=None
+        Tahminlerin tutulacağı alt ve üst sınır. `None` ise clipping
+        uygulanmaz.
+
+    Returns
+    -------
+    pd.DataFrame
+        Her cross-validation fold'u için fold numarası, MAE ve RMSE
+        değerlerini içeren sonuç tablosu.
+
+    Notes
+    -----
+    Her fold'da ARIMA modeli yalnızca train bölümünde eğitilir ve test
+    horizonunun tamamı için ileri tahmin üretir.
+    """
 
     results = []
 
@@ -155,7 +242,25 @@ def forecast_arima(
     order: tuple[int, int, int],
     steps: int,
 ) -> pd.Series:
-    """ARIMA modelini tüm seri üzerinde eğitir ve ileri tahmin üretir."""
+    """
+    ARIMA modelini tüm seri üzerinde eğitir ve ileri tahmin üretir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Modelin eğitileceği tarihsel zaman serisi.
+
+    order : tuple[int, int, int]
+        ARIMA modelinin `(p, d, q)` parametreleri.
+
+    steps : int
+        Gelecekte tahmin edilecek dönem sayısı.
+
+    Returns
+    -------
+    pd.Series
+        Eğitilmiş ARIMA modelinin gelecek dönem tahminleri.
+    """
 
     model = ARIMA(
         series,
@@ -176,7 +281,40 @@ def evaluate_prophet_cv(
     yearly_seasonality=True,
     clip_range: tuple[float, float] | None = None,
 ) -> pd.DataFrame:
-    """Prophet modelini time-series cross-validation ile değerlendirir."""
+    """
+    Prophet modelini time-series cross-validation ile değerlendirir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Değerlendirilecek tarihsel zaman serisi.
+
+    splitter : TimeSeriesSplit
+        Zaman sırasını koruyarak train ve test fold'larını oluşturan
+        scikit-learn `TimeSeriesSplit` nesnesi.
+
+    changepoint_prior_scale : float, default=1.0
+        Prophet modelinin trend değişimlerine ne kadar esnek tepki
+        vereceğini belirleyen parametre.
+
+    yearly_seasonality : str | bool, default=True
+        Prophet modelinde yıllık sezonsallığın kullanım biçimi.
+
+    clip_range : tuple[float, float] | None, default=None
+        Tahminlerin tutulacağı alt ve üst sınır. `None` ise clipping
+        uygulanmaz.
+
+    Returns
+    -------
+    pd.DataFrame
+        Her cross-validation fold'u için fold numarası, MAE ve RMSE
+        değerlerini içeren sonuç tablosu.
+
+    Notes
+    -----
+    Her fold'da Prophet modeli yalnızca train verisiyle eğitilir ve
+    test tarihlerine karşılık gelen tahminler üzerinden değerlendirilir.
+    """
 
     results = []
 
@@ -239,19 +377,24 @@ def train_prophet_model(
     Parameters
     ----------
     series : pd.Series
-        Eğitilecek zaman serisi.
+        Eğitilecek tarihsel zaman serisi.
 
     changepoint_prior_scale : float, default=1.0
-        Prophet modelinin trend değişimlerine ne kadar
-        esnek tepki vereceğini belirler.
+        Prophet modelinin trend değişimlerine ne kadar esnek tepki
+        vereceğini belirler.
 
     yearly_seasonality : str | bool, default="auto"
-        Yıllık sezonsallığın kullanılıp kullanılmayacağını belirler.
+        Yıllık sezonsallığın kullanım biçimini belirler.
 
     Returns
     -------
     Prophet
-        Eğitilmiş Prophet model nesnesi.
+        Verilen serinin tamamı üzerinde eğitilmiş Prophet model nesnesi.
+
+    Notes
+    -----
+    Fonksiyon tarih index'ini Prophet'in beklediği `ds` sütununa,
+    seri değerlerini ise `y` sütununa dönüştürerek modeli eğitir.
     """
 
     # --------------------------------------------------
@@ -309,8 +452,33 @@ def forecast_prophet(
     yearly_seasonality: str | bool = "auto",
 ) -> pd.DataFrame:
     """
-    Prophet modelini tüm seri üzerinde eğitir
-    ve ileriye yönelik tahmin üretir.
+    Prophet modelini tüm seri üzerinde eğitir ve ileriye yönelik tahmin üretir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Gelecek tahmini üretilecek tarihsel zaman serisi.
+
+    steps : int
+        Gelecekte tahmin edilecek hafta sayısı.
+
+    changepoint_prior_scale : float, default=1.0
+        Prophet modelinin trend değişimlerine ne kadar esnek tepki
+        vereceğini belirler.
+
+    yearly_seasonality : str | bool, default="auto"
+        Yıllık sezonsallığın kullanım biçimini belirler.
+
+    Returns
+    -------
+    pd.DataFrame
+        Gelecek `steps` dönem için `ds`, `yhat`, `yhat_lower` ve
+        `yhat_upper` sütunlarını içeren Prophet tahmin tablosu.
+
+    Notes
+    -----
+    Model eğitimi `train_prophet_model()` fonksiyonu üzerinden yapılır.
+    Gelecek tarihler haftalık `W-SUN` frekansıyla oluşturulur.
     """
 
     # --------------------------------------------------
@@ -370,7 +538,49 @@ def evaluate_xgb_recursive_with_change(
     learning_rate: float = 0.03,
     clip_range: tuple[float, float] | None = None,
 ) -> pd.DataFrame:
-    """XGBoost modelini recursive time-series CV ile değerlendirir."""
+    """
+    XGBoost modelini recursive time-series cross-validation ile değerlendirir.
+
+    Parameters
+    ----------
+    X : pd.DataFrame
+        Lag ve change feature'larını içeren model girdi tablosu.
+
+    y : pd.Series
+        Modelin tahmin etmeye çalıştığı hedef zaman serisi.
+
+    splitter : TimeSeriesSplit
+        Zaman sırasını koruyarak train ve test fold'larını oluşturan
+        scikit-learn `TimeSeriesSplit` nesnesi.
+
+    n_lags : int, default=8
+        Recursive tahminde kullanılacak geçmiş dönem sayısı.
+
+    max_depth : int, default=2
+        XGBoost ağaçlarının maksimum derinliği.
+
+    n_estimators : int, default=300
+        Kullanılacak boosting ağacı sayısı.
+
+    learning_rate : float, default=0.03
+        Her ağacın modele katkısının büyüklüğünü belirleyen öğrenme oranı.
+
+    clip_range : tuple[float, float] | None, default=None
+        Tahminlerin tutulacağı alt ve üst sınır. `None` ise clipping
+        uygulanmaz.
+
+    Returns
+    -------
+    pd.DataFrame
+        Her cross-validation fold'u için fold numarası, MAE ve RMSE
+        değerlerini içeren sonuç tablosu.
+
+    Notes
+    -----
+    Tahminler recursive olarak üretilir. Bir adımda üretilen tahmin,
+    sonraki adımın lag girdileri arasına eklenir. Böylece test dönemindeki
+    gerçek gelecek değerleri modele girdi olarak verilmez.
+    """
 
     results = []
 
@@ -460,16 +670,15 @@ def train_xgb_model(
     random_state: int = 42,
 ) -> XGBRegressor:
     """
-    Lag ve change feature'larını kullanarak
-    XGBoost modelini tüm seri üzerinde eğitir.
+    Lag ve change feature'larını kullanarak XGBoost modelini tüm seri üzerinde eğitir.
 
     Parameters
     ----------
     series : pd.Series
-        Eğitilecek zaman serisi.
+        Eğitilecek tarihsel zaman serisi.
 
     n_lags : int, default=8
-        Modelin kullanacağı geçmiş hafta sayısı.
+        Modelin kullanacağı geçmiş dönem sayısı.
 
     max_depth : int, default=2
         XGBoost ağaçlarının maksimum derinliği.
@@ -478,15 +687,22 @@ def train_xgb_model(
         Kullanılacak toplam boosting ağacı sayısı.
 
     learning_rate : float, default=0.03
-        Her ağacın modele katkısının büyüklüğü.
+        Her ağacın modele katkısının büyüklüğünü belirleyen öğrenme oranı.
 
     random_state : int, default=42
-        Sonuçların tekrar üretilebilir olmasını sağlar.
+        Model eğitimindeki rastgeleliği sabitleyerek sonuçların tekrar
+        üretilebilir olmasına yardımcı olur.
 
     Returns
     -------
     XGBRegressor
-        Eğitilmiş XGBoost model nesnesi.
+        Lag ve change feature'ları üzerinde eğitilmiş XGBoost model nesnesi.
+
+    Notes
+    -----
+    Girdi feature'ları `lag_1 ... lag_n`, `change_1` ve `change_2`
+    sütunlarından oluşturulur. Lag üretimi nedeniyle oluşan eksik
+    başlangıç satırları eğitimden önce kaldırılır.
     """
 
     # --------------------------------------------------
@@ -582,14 +798,31 @@ def forecast_xgb_recursive_with_change(
     n_lags: int = 8,
 ) -> pd.Series:
     """
-    Eğitilmiş XGBoost mantığını kullanarak
-    geleceği recursive şekilde tahmin eder.
+    XGBoost modelini kullanarak geleceği recursive şekilde tahmin eder.
 
-    Model feature'ları:
+    Parameters
+    ----------
+    series : pd.Series
+        Modelin eğitileceği ve recursive tahminde başlangıç geçmişi
+        olarak kullanılacak zaman serisi.
 
-    - lag_1 ... lag_n
-    - change_1
-    - change_2
+    steps : int
+        Gelecekte tahmin edilecek hafta sayısı.
+
+    n_lags : int, default=8
+        Modelin kullanacağı geçmiş dönem sayısı.
+
+    Returns
+    -------
+    pd.Series
+        Gelecek haftalara ait recursive XGBoost tahminleri. Serinin
+        index'i haftalık (`W-SUN`) gelecek tarihlerden oluşur.
+
+    Notes
+    -----
+    Model `lag_1 ... lag_n`, `change_1` ve `change_2` feature'larını
+    kullanır. Her yeni tahmin geçmiş listesine eklenir ve bir sonraki
+    tahminin lag girdilerinden biri haline gelir.
     """
 
     # --------------------------------------------------
@@ -721,8 +954,65 @@ def evaluate_ensemble_cv(
     clip_range: tuple[float, float] | None = None,
 ):
     """
-    Evaluate a Prophet + XGBoost ensemble using
-    time-series cross-validation.
+    Prophet ve XGBoost ensemble modelini time-series cross-validation ile değerlendirir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Değerlendirmede kullanılan tarihsel zaman serisi.
+
+    X : pd.DataFrame
+        XGBoost için hazırlanmış lag ve change feature tablosu.
+
+    y : pd.Series
+        XGBoost ve ensemble değerlendirmesinde kullanılan hedef seri.
+
+    splitter : TimeSeriesSplit
+        Zaman sırasını koruyarak train ve test fold'larını oluşturan
+        scikit-learn `TimeSeriesSplit` nesnesi.
+
+    n_lags : int, default=8
+        XGBoost recursive tahmininde kullanılacak geçmiş dönem sayısı.
+
+    prophet_weight : float, default=0.5
+        Ensemble içinde Prophet tahminine verilen ağırlık.
+
+    xgb_weight : float, default=0.5
+        Ensemble içinde XGBoost tahminine verilen ağırlık.
+
+    changepoint_prior_scale : float, default=1.0
+        Prophet modelinin trend değişimlerine duyarlılığını belirler.
+
+    yearly_seasonality : str | bool, default="auto"
+        Prophet yıllık sezonsallık ayarı.
+
+    max_depth : int, default=2
+        XGBoost ağaçlarının maksimum derinliği.
+
+    n_estimators : int, default=300
+        XGBoost boosting ağacı sayısı.
+
+    learning_rate : float, default=0.03
+        XGBoost öğrenme oranı.
+
+    random_state : int, default=42
+        XGBoost eğitimindeki rastgeleliği sabitlemek için kullanılan değer.
+
+    clip_range : tuple[float, float] | None, default=None
+        Prophet, XGBoost ve ensemble tahminlerinin tutulacağı alt ve
+        üst sınır. `None` ise clipping uygulanmaz.
+
+    Returns
+    -------
+    pd.DataFrame
+        Her cross-validation fold'u için ensemble modelinin fold numarası,
+        MAE ve RMSE değerlerini içeren sonuç tablosu.
+
+    Notes
+    -----
+    Her fold'da Prophet ve XGBoost yalnızca train verisi üzerinde eğitilir.
+    XGBoost tahminleri recursive olarak üretilir; iki modelin tahminleri
+    verilen ağırlıklarla birleştirilir.
     """
 
     results = []
@@ -866,19 +1156,21 @@ def select_best_model(
     model_results: dict[str, pd.DataFrame],
 ) -> tuple[str, pd.DataFrame]:
     """
-    Select the forecasting model with the lowest mean MAE.
+    Ortalama MAE değeri en düşük forecasting modelini seçer.
 
     Parameters
     ----------
     model_results : dict[str, pd.DataFrame]
-        Dictionary containing cross-validation results
-        for each forecasting model.
+        Her forecasting modeli için cross-validation sonuçlarını içeren
+        dictionary. Her sonuç tablosunda `MAE` ve `RMSE` sütunlarının
+        bulunması beklenir.
 
     Returns
     -------
     tuple[str, pd.DataFrame]
-        Name of the best model and a comparison table
-        sorted by mean MAE.
+        İlk eleman en düşük Mean MAE değerine sahip modelin adıdır.
+        İkinci eleman ise modellerin Mean MAE ve Mean RMSE değerlerini
+        içeren ve Mean MAE'ye göre sıralanmış karşılaştırma tablosudur.
     """
 
     comparison = []

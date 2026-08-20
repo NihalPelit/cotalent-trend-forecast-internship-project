@@ -43,12 +43,13 @@ def load_model_metadata(
     Parameters
     ----------
     metadata_path : str | Path
-        Metadata JSON dosyasının yolu.
+        Model konfigürasyon bilgilerini içeren metadata JSON dosyasının yolu.
 
     Returns
     -------
     dict
-        Model konfigürasyon bilgileri.
+        JSON dosyasından okunan model konfigürasyon bilgilerini içeren
+        Python dictionary nesnesi.
     """
 
     # Gelen yolu Path nesnesine dönüştürüyoruz.
@@ -75,6 +76,22 @@ def load_prophet_model(
 ):
     """
     Kaydedilmiş Prophet modelini JSON dosyasından yükler.
+
+    Parameters
+    ----------
+    model_path : str | Path
+        Prophet modelinin JSON formatında kaydedildiği dosyanın yolu.
+
+    Returns
+    -------
+    object
+        JSON içeriğinden yeniden oluşturulmuş, önceden eğitilmiş
+        Prophet model nesnesi.
+
+    Notes
+    -----
+    Model, Prophet'in `model_from_json()` serialization mekanizması
+    kullanılarak yeniden oluşturulur.
     """
 
     # Dosya yolunu Path nesnesine çeviriyoruz.
@@ -100,7 +117,23 @@ def load_xgb_model(
     model_path: str | Path,
 ) -> XGBRegressor:
     """
-    Kaydedilmiş XGBoost modelini JSON dosyasından yükler.
+    Kaydedilmiş XGBoost modelini dosyadan yükler.
+
+    Parameters
+    ----------
+    model_path : str | Path
+        `save_model()` ile kaydedilmiş XGBoost model dosyasının yolu.
+
+    Returns
+    -------
+    XGBRegressor
+        Dosyadan yeniden yüklenmiş, önceden eğitilmiş XGBoost model nesnesi.
+
+    Notes
+    -----
+    Önce boş bir `XGBRegressor` nesnesi oluşturulur, ardından
+    `load_model()` ile kaydedilmiş model parametreleri ve öğrenilmiş
+    ağaç yapısı yüklenir.
     """
 
     model_path = Path(model_path)
@@ -123,6 +156,34 @@ def forecast_prophet_loaded(
 ) -> pd.Series:
     """
     Önceden eğitilmiş Prophet modeliyle gelecek tahmini üretir.
+
+    Parameters
+    ----------
+    model : object
+        Daha önce eğitilmiş ve diskten yüklenmiş Prophet model nesnesi.
+
+    series : pd.Series
+        Son gözlem tarihini ve geçmiş zaman serisini içeren veri.
+        Gelecek tahmin tarihlerinin başlangıcı bu serinin son tarihine
+        göre belirlenir.
+
+    steps : int
+        Gelecekte tahmin edilecek hafta sayısı.
+
+    clip_range : tuple[float, float] | None, default=(0, 100)
+        Tahminlerin tutulacağı alt ve üst sınır. `None` verilirse
+        clipping işlemi uygulanmaz.
+
+    Returns
+    -------
+    pd.Series
+        Gelecek haftalara ait Prophet tahminleri. Serinin index'i
+        haftalık (`W-SUN`) gelecek tarihlerden oluşur.
+
+    Notes
+    -----
+    Bu fonksiyon modeli yeniden eğitmez. Yalnızca önceden eğitilmiş
+    Prophet modelinin `predict()` metodunu kullanarak inference yapar.
     """
 
     # --------------------------------------------------
@@ -181,8 +242,38 @@ def forecast_xgb_loaded(
     clip_range: tuple[float, float] | None = (0, 100),
 ) -> pd.Series:
     """
-    Önceden eğitilmiş XGBoost modeliyle
-    recursive gelecek tahmini üretir.
+    Önceden eğitilmiş XGBoost modeliyle recursive gelecek tahmini üretir.
+
+    Parameters
+    ----------
+    model : XGBRegressor
+        Daha önce eğitilmiş ve diskten yüklenmiş XGBoost model nesnesi.
+
+    series : pd.Series
+        Recursive forecasting için başlangıç geçmişini sağlayan tarihsel
+        zaman serisi.
+
+    steps : int
+        Gelecekte tahmin edilecek hafta sayısı.
+
+    n_lags : int, default=8
+        Modelin her tahmin adımında kullanacağı geçmiş dönem sayısı.
+
+    clip_range : tuple[float, float] | None, default=(0, 100)
+        Tahminlerin tutulacağı alt ve üst sınır. `None` verilirse
+        clipping işlemi uygulanmaz.
+
+    Returns
+    -------
+    pd.Series
+        Gelecek haftalara ait recursive XGBoost tahminleri. Serinin
+        index'i haftalık (`W-SUN`) gelecek tarihlerden oluşur.
+
+    Notes
+    -----
+    Model `lag_1 ... lag_n`, `change_1` ve `change_2` feature'larını
+    kullanır. Her tahmin bir sonraki adımda geçmişe eklenerek yeni
+    `lag_1` değerinin oluşmasını sağlar.
     """
 
     # Modelde kullanılan feature isimlerini
@@ -284,8 +375,27 @@ def forecast_naive_loaded(
     steps: int,
 ) -> pd.Series:
     """
-    Son gözlenen değeri gelecek dönemlere taşıyan
-    Naive forecast üretir.
+    Son gözlenen değeri gelecek dönemlere taşıyan Naive forecast üretir.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Son gözlenen değeri ve son tarihi içeren tarihsel zaman serisi.
+
+    steps : int
+        Gelecekte tahmin edilecek hafta sayısı.
+
+    Returns
+    -------
+    pd.Series
+        Son gözlenen değerin tüm forecast horizonuna tekrarlandığı
+        Naive tahmin serisi. Index haftalık (`W-SUN`) gelecek tarihlerden
+        oluşur.
+
+    Notes
+    -----
+    Naive yöntem model eğitimi gerektirmez; serinin son gerçek değerini
+    bütün gelecek dönemler için sabit tahmin olarak kullanır.
     """
 
     # Zaman serisinin en son gerçek değerini alıyoruz.
@@ -312,9 +422,42 @@ def generate_final_forecast(
     metadata_path: str | Path,
 ) -> pd.DataFrame:
     """
-    Kaydedilmiş final modelleri ve metadata bilgilerini
-    kullanarak ChatGPT, Gemini ve Claude için
-    final gelecek tahminlerini üretir.
+    Kaydedilmiş final modelleri ve metadata bilgilerini kullanarak
+    ChatGPT, Gemini ve Claude için final gelecek tahminlerini üretir.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        `chatgpt`, `gemini` ve `claude` sütunlarını içeren, tarih index'li
+        güncel Google Trends veri seti.
+
+    models_dir : str | Path
+        Kaydedilmiş Prophet ve XGBoost model dosyalarının bulunduğu
+        klasörün yolu.
+
+    metadata_path : str | Path
+        Final model seçimlerini, model dosya adlarını, ensemble
+        ağırlıklarını, lag sayısını, forecast horizonunu ve veri cutoff
+        tarihini içeren metadata JSON dosyasının yolu.
+
+    Returns
+    -------
+    pd.DataFrame
+        ChatGPT, Gemini ve Claude için final gelecek tahminlerini içeren
+        tarih index'li DataFrame.
+
+    Raises
+    ------
+    ValueError
+        Veri setinin son tarihi ile metadata içerisinde kayıtlı
+        `data_cutoff_date` eşleşmediğinde yükseltilir.
+
+    Notes
+    -----
+    ChatGPT tahmini, metadata'da kayıtlı ağırlıklarla Prophet ve XGBoost
+    tahminlerinin ensemble edilmesiyle oluşturulur. Gemini ve Claude
+    tahminleri ise mevcut final model seçimine göre Naive yöntemle
+    üretilir. Bu fonksiyon kaydedilmiş modelleri yeniden eğitmez.
     """
 
     # --------------------------------------------------
