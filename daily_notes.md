@@ -3191,8 +3191,67 @@ sistemin teknik mantığını bütünsel olarak pekiştirmekti.
 - NumPy-style docstring
 - README ile proje reproducibility'si
 
+
+
 ### Sonraki Adımlar
 
 - README ve `requirements.txt` son kontrollerini tamamlamak.
 - GitHub repository'sini güncellemek.
 - Final rapor ve sunum hazırlıklarına başlamak.
+
+## Day 15 — 21.08.2026
+
+### Hedefler
+
+- Mevcut final model seçimlerini alternatif forecasting yaklaşımlarıyla karşılaştırmak.
+- Final modellerin farklı yöntemlere karşı performansını kontrol etmek.
+- Proje bağımlılıklarını ve Git yapılandırmasını final hale getirmek.
+- README dosyasını güncel proje durumuna göre düzenlemek.
+
+### Yapılan Çalışmalar
+
+1. Alternatif forecasting modelleri test edildi.
+   - Damped Holt modeli uygulandı.
+   - Theta modeli uygulandı.
+   - Local Linear Trend modeli uygulandı.
+   - SARIMAX modeli farklı seasonal konfigürasyonlarla test edildi.
+   - Tüm modeller mevcut sistemle aynı time-series cross-validation yapısında değerlendirildi.
+
+2. Alternatif modeller mevcut final modellerle karşılaştırıldı.
+   - ChatGPT için Prophet + XGBoost Ensemble yaklaşımı en iyi performansı göstermeye devam etti.
+   - Gemini için Theta ve Naive modellerinin performanslarının birbirine çok yakın olduğu görüldü.
+   - Theta modelinin ortalama MAE değeri çok küçük bir farkla daha düşük olsa da Naive model daha fazla fold kazandı ve RMSE açısından da çok küçük bir avantaja sahip oldu.
+   - Performans farkının pratik olarak anlamlı olmaması ve Naive modelin daha basit olması nedeniyle Gemini için Naive model korundu.
+   - Claude için Naive model alternatif modellerden daha iyi performans göstermeye devam etti.
+   - Alternatif model deneyleri sonucunda final model seçimlerinin değiştirilmesine gerek olmadığı sonucuna ulaşıldı.
+
+3. `requirements.txt` dosyası düzenlendi.
+   - Sanal ortamın tüm alt bağımlılıklarını içeren uzun `pip freeze` listesi yerine projenin doğrudan kullandığı temel bağımlılıklar bırakıldı.
+   - Eksik olan XGBoost, Plotly ve Streamlit paketleri gerçek ortam sürümleriyle eklendi.
+   - `python -m pip check` ile dependency kontrolü yapıldı.
+   - Herhangi bir bozuk veya çakışan dependency bulunmadı.
+
+4. `.gitignore` dosyası gözden geçirildi.
+   - Python, Jupyter, sanal ortam ve geliştirme cache dosyalarının Git dışında tutulması sağlandı.
+   - Final uygulamanın ihtiyaç duyduğu processed veri dosyalarının Git tarafından takip edilebilmesi için gerekli düzenlemeler yapıldı.
+   - Model JSON artifact'larının ve final forecast çıktılarının Git tarafından takip edildiği doğrulandı.
+
+5. README dosyası final proje durumuna göre güncellendi.
+   - Proje yapısı düzenlendi.
+   - Day 15 özeti eklendi.
+   - Kurulum adımları `clone → virtual environment → dependencies → dashboard` sırasına göre düzenlendi.
+   - Final model, prediction interval, monitoring ve sistem validation bilgilerinin güncel olduğu kontrol edildi.
+
+### Bugün Öğrenilen Kavramlar
+
+- Alternatif modelleri denemenin yalnızca daha iyi model bulmak için değil, mevcut model seçiminin sağlamlığını doğrulamak için de kullanılabileceği görüldü.
+- Çok küçük metrik farklarının her zaman model değiştirmek için yeterli olmadığı öğrenildi.
+- Model seçiminde MAE ve RMSE yanında fold bazlı performans, model karmaşıklığı ve açıklanabilirliğin de değerlendirilmesi gerektiği görüldü.
+- `requirements.txt` dosyasında projenin doğrudan bağımlılıkları ile paketlerin alt bağımlılıkları arasındaki fark öğrenildi.
+- Reproducible bir projenin yalnızca çalışan koddan değil; veri, model artifact'ları, bağımlılıklar, dokümantasyon ve Git yapılandırmasının birlikte doğru yönetilmesinden oluştuğu pekiştirildi.
+
+### Sonraki Adımlar
+
+- Final Git kontrolünü yapmak ve Day 15 değişikliklerini commit etmek.
+- Final proje raporunu hazırlamaya başlamak.
+- Proje sunumu ve demo akışını hazırlamak.

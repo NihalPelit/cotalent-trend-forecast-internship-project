@@ -2,8 +2,6 @@
 
 ## Proje Hakkında
 
-## Proje Hakkında
-
 Bu proje, coTalent AI Takımı staj programı kapsamında geliştirilen
 **Veri Tabanlı Trend Tahminleme ve Öngörü Motoru** çalışmasıdır.
 
@@ -38,6 +36,7 @@ trend-forecast-project/
 ├── data/
 │   ├── raw/
 │   └── processed/
+        ├── google_trends_ai_3y_clean.csv
 │       └── google_trends_ai_3y_updated_2026-08-09.csv
 │
 ├── models/
@@ -59,7 +58,7 @@ trend-forecast-project/
 │   ├── fetch_data.py
 │   ├── forecasting.py
 │   ├── monitoring.py
-│   └── pipeline.py
+│   └── preprocess.py
 |   └── time_series.py
 |   └── pipeline.py
 │
@@ -302,6 +301,18 @@ kapsamlı teknik tekrarı yapılarak proje bilgisi pekiştirildi.
 - Gelecekte gerçekleşen değerlerin mevcut tahminlerle karşılaştırılabilmesi
   için forward validation tablosu eklendi.
 
+### 15. Gün
+
+- Mevcut final model seçimlerinin sağlamlığını değerlendirmek amacıyla alternatif forecasting yaklaşımları test edildi.
+- Damped Holt, Theta, Local Linear Trend ve SARIMAX modelleri mevcut modellerle aynı time-series cross-validation yapısında karşılaştırıldı.
+- ChatGPT için mevcut Prophet + XGBoost Ensemble yaklaşımı alternatif modellerden daha iyi performans göstermeye devam etti.
+- Gemini için Theta modeli Naive modele çok yakın sonuç verdi ancak fark pratik olarak anlamlı bulunmadığı için daha basit olan Naive model korundu.
+- Claude için mevcut Naive model alternatif yaklaşımlardan daha iyi performans göstermeye devam etti.
+- Alternatif model deneyleri sonucunda final model seçimlerinin değiştirilmesine gerek olmadığı değerlendirildi.
+- `requirements.txt` doğrudan proje bağımlılıklarını içerecek şekilde düzenlendi ve eksik XGBoost, Plotly ve Streamlit bağımlılıkları eklendi.
+- Python ortamındaki dependency bütünlüğü `pip check` ile doğrulandı.
+- `.gitignore` final processed veri dosyalarının Git tarafından takip edilebilmesine uygun şekilde güncellendi.
+
 ## Veri
 
 Oluşturulan ham ve işlenmiş veri setleri aşağıdaki klasörlerde saklanmaktadır:
@@ -313,38 +324,48 @@ data/processed/
 
 ## Kurulum
 
-Sanal ortam oluşturmak:
-
-```bash
-python3 -m venv cotale-env
-```
-
-Sanal ortamı aktif etmek:
-
-```bash
-source cotale-env/bin/activate
-```
-
-Bağımlılıkları yüklemek:
-
-```bash
-pip install -r requirements.txt
-```
-Dashboard'u çalıştırmak için proje ana klasöründe:
-
-```bash
-streamlit run app.py
-```
-
-Projeyi klonlamak:
+Projeyi bilgisayarınıza klonlayın:
 
 ```bash
 git clone https://github.com/NihalPelit/cotalent-trend-forecast-internship-project.git
 cd cotalent-trend-forecast-internship-project
 ```
-komutu kullanılabilir.
 
-Uygulama varsayılan olarak yerel Streamlit sunucusunda açılır.
+Python sanal ortamı oluşturun:
+
+```bash
+python3 -m venv cotale-env
+```
+
+Sanal ortamı aktif edin:
+
+### macOS / Linux
+
+```bash
+source cotale-env/bin/activate
+```
+
+### Windows
+
+```bash
+cotale-env\Scripts\activate
+```
+
+Gerekli Python bağımlılıklarını yükleyin:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Dashboard'u proje ana klasöründe çalıştırın:
+
+```bash
+streamlit run app.py
+```
+
+Uygulama varsayılan olarak yerel Streamlit sunucusunda açılır. Terminalde verilen yerel adres tarayıcı üzerinden açılarak dashboard kullanılabilir.
+
+Notebook çalışmalarını çalıştırmak için VS Code veya Jupyter üzerinden oluşturulan `cotale-env` sanal ortamı Python kernel olarak seçilebilir.
 
 ## Durum
 
@@ -364,6 +385,7 @@ Uygulama varsayılan olarak yerel Streamlit sunucusunda açılır.
 - Forecast tabanlı yükselen trend early-warning mekanizması bulunmaktadır.
 - Streamlit + Plotly tabanlı interaktif dashboard yerelde çalışmaktadır.
 - Event-aware XGBoost yaklaşımı deneysel olarak test edildi ancak mevcut binary event feature yapısı final forecasting pipeline'ına dahil edilmedi.
-- - Cross-validation residual'larına dayalı %80 ampirik prediction interval dashboard'a entegre edildi.
+- Cross-validation residual'larına dayalı %80 ampirik prediction interval dashboard'a entegre edildi.
 - Uçtan uca sistem validation kontrolleri başarıyla tamamlandı.
-- Sonraki aşamada final proje raporu, sunum ve demo hazırlıkları tamamlanacaktır.
+- Damped Holt, Theta, Local Linear Trend ve SARIMAX alternatifleri aynı evaluation yapısında test edildi; mevcut final model seçimlerini değiştirecek anlamlı bir performans artışı gözlenmedi.
+

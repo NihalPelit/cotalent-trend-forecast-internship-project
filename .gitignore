@@ -1,4 +1,4 @@
-# Virtual environment
+# Virtual environments
 cotale-env/
 venv/
 .venv/
@@ -6,6 +6,10 @@ venv/
 # Python cache
 __pycache__/
 *.py[cod]
+
+# Development tool caches
+.ruff_cache/
+.pytest_cache/
 
 # Jupyter temporary files
 .ipynb_checkpoints/
@@ -17,19 +21,28 @@ __pycache__/
 .env
 .env.*
 
-# Raw and processed datasets
+# Raw datasets
 data/raw/*
+
+# Keep empty raw folder in Git
+!data/raw/.gitkeep
+
+# Processed datasets
 data/processed/*
 
-# Keep empty data folders in Git
-!data/raw/.gitkeep
+# Keep processed folder and final dataset required by the application
 !data/processed/.gitkeep
+!data/processed/google_trends_ai_3y_updated_2026-08-09.csv
 
-# Generated model files
+# Eğer eski clean dataset notebook'larda gerekiyorsa bunu da tut
+!data/processed/google_trends_ai_3y_clean.csv
+
+# Generated model formats not currently used by final pipeline
 models/*.pkl
 models/*.joblib
 
-# Company / project documents
-*.pdf
+# Internship/company document
+coTalent_Stajyer_Proje_Dokumani.pdf
 
+# VS Code temporary notebook
 notebooks/tempCodeRunnerFile.ipynb
